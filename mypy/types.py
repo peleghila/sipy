@@ -1008,6 +1008,54 @@ class UnboundType(ProperType):
             original_str_fallback=data["expr_fallback"],
         )
 
+class ComputedType(ProperType):
+    """Represents a SI computation in the type annotations"""
+
+    __slots__ = ("left", "right", "op")
+    left: ProperType | int | float
+    right: ProperType | int | float
+    op: str
+
+    from ast import operator
+
+    def __init__(
+        self,
+        left: ProperType | int | float,
+        right: ProperType | int | float,
+        op: operator,
+        line: int = -1,
+        column: int = -1,
+    ) -> None:
+        super().__init__(line, column)
+        self.left = left
+        self.right = right
+        self.op = op
+
+    def accept(self, visitor: TypeVisitor[T]) -> T:
+        return visitor.visit_computed_type(self)
+
+
+class CompoundType(ProperType):
+    """Represents an SI type sliced with a numeric type"""
+
+    __slots__ = ("base_type","numeric_type")
+
+    base_type: ProperType
+    numeric_type: ProperType
+
+    def __init__(
+        self,
+        base: ProperType,
+        numeric: ProperType,
+        line: int = -1,
+        column: int = -1,
+    ) -> None:
+        super().__init__(line, column)
+        self.base_type = base
+        self.numeric_type = numeric
+
+    def accept(self, visitor: TypeVisitor[T]) -> T:
+        return visitor.visit_compound_type(self)
 
 class CallableArgument(ProperType):
     """Represents a Arg(type, 'name') inside a Callable's type list.
@@ -3532,6 +3580,12 @@ class TypeStrVisitor(SyntheticTypeVisitor[str]):
 
     def visit_unpack_type(self, t: UnpackType) -> str:
         return f"Unpack[{t.type.accept(self)}]"
+
+    def visit_computed_type(self, t: ComputedType):
+        return f"Computed({t.left.accept(self)}{t.op}{t.right.accept(self)})"
+
+    def visit_compound_type(self, t: CompoundType):
+        return f"Compound({t.base_type.accept(self)}[{t.numeric_type.accept(self)}])"
 
     def list_str(self, a: Iterable[Type]) -> str:
         """Convert items of an array to strings (pretty-print types)

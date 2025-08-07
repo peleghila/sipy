@@ -110,6 +110,7 @@ from mypy.types import (
     AnyType,
     CallableArgument,
     CallableType,
+    ComputedType,
     EllipsisType,
     Instance,
     ProperType,
@@ -121,7 +122,7 @@ from mypy.types import (
     TypeOfAny,
     UnboundType,
     UnionType,
-    UnpackType,
+    UnpackType, CompoundType,
 )
 from mypy.util import bytes_to_human_readable_repr, unnamed_function
 
@@ -1990,18 +1991,24 @@ class TypeConverter:
         return UnboundType(n.id, line=self.line, column=self.convert_column(n.col_offset))
 
     def visit_BinOp(self, n: ast3.BinOp) -> Type:
-        if not isinstance(n.op, ast3.BitOr):
-            return self.invalid_type(n)
-
-        left = self.visit(n.left)
-        right = self.visit(n.right)
-        return UnionType(
-            [left, right],
-            line=self.line,
-            column=self.convert_column(n.col_offset),
-            is_evaluated=self.is_evaluated,
-            uses_pep604_syntax=True,
-        )
+        if isinstance(n.op, ast3.BitOr):
+            left = self.visit(n.left)
+            right = self.visit(n.right)
+            return UnionType(
+                [left, right],
+                line=self.line,
+                column=self.convert_column(n.col_offset),
+                is_evaluated=self.is_evaluated
+            )
+        if isinstance(n.op,(ast3.Mult, ast3.Pow, ast3.Div)):
+            left = self.visit(n.left)
+            right = self.visit(n.right)
+            return ComputedType(
+                left, right, n.op,
+                line=self.line,
+                column=self.convert_column(n.col_offset)
+            )
+        return self.invalid_type(n)
 
     def visit_Constant(self, n: Constant) -> Type:
         val = n.value
@@ -2112,6 +2119,15 @@ class TypeConverter:
                 line=self.line,
                 column=value.column,
                 empty_tuple_index=empty_tuple_index,
+            )
+        elif isinstance(value, ComputedType):
+            # compound type, e.g., Km [ int ].
+            assert(len(params) == 1)
+            return CompoundType(
+                value,
+                params[0],
+                line = self.line,
+                column = value.column
             )
         else:
             return self.invalid_type(n)

@@ -22,6 +22,8 @@ from mypy.types import (
     AnyType,
     CallableArgument,
     CallableType,
+    CompoundType,
+    ComputedType,
     DeletedType,
     EllipsisType,
     ErasedType,
@@ -144,6 +146,14 @@ class TypeVisitor(Generic[T]):
     @abstractmethod
     def visit_unpack_type(self, t: UnpackType) -> T:
         pass
+
+    @abstractmethod
+    def visit_compound_type(self, t: CompoundType):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def visit_computed_type(self, t: ComputedType):
+        raise NotImplementedError()
 
 
 @trait
@@ -435,6 +445,12 @@ class TypeQuery(SyntheticTypeVisitor[T]):
     def visit_placeholder_type(self, t: PlaceholderType) -> T:
         return self.query_types(t.args)
 
+    def visit_compound_type(self, t: CompoundType) -> T:
+        raise NotImplementedError()
+
+    def visit_computed_type(self, t: ComputedType) -> T:
+        raise NotImplementedError()
+
     def visit_type_alias_type(self, t: TypeAliasType) -> T:
         # Skip type aliases already visited types to avoid infinite recursion.
         # TODO: Ideally we should fire subvisitors here (or use caching) if we care
@@ -587,6 +603,12 @@ class BoolTypeQuery(SyntheticTypeVisitor[bool]):
         if self.skip_alias_target:
             return self.query_types(t.args)
         return get_proper_type(t).accept(self)
+
+    def visit_compound_type(self, t: CompoundType):
+        return self.query_types([t.numeric_type,t.base_type])
+
+    def visit_computed_type(self, t: ComputedType):
+        return self.query_types([t.left, t.right])
 
     def query_types(self, types: list[Type] | tuple[Type, ...]) -> bool:
         """Perform a query for a sequence of types using the strategy to combine the results."""

@@ -108,7 +108,7 @@ from mypy.types import (
     find_unpack_in_list,
     flatten_nested_tuples,
     get_proper_type,
-    has_type_vars,
+    has_type_vars, CompoundType, ComputedType,
 )
 from mypy.types_utils import is_bad_type_type_item
 from mypy.typevars import fill_typevars
@@ -1387,6 +1387,24 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
             # TODO: Handle non-TypeInfo
             assert isinstance(n.node, TypeInfo)
             return self.analyze_type_with_type_info(n.node, t.args, t, False)
+
+    def visit_compound_type(self, t: CompoundType) -> Type:
+        return CompoundType(
+            self.anal_type(t.base_type),
+            self.anal_type(t.numeric_type),
+            t.line,
+            t.column
+        )
+    def visit_computed_type(self, t: ComputedType) -> Type:
+        if isinstance(t.left,ProperType):
+            lhs = self.anal_type(t.left)
+        else:
+            lhs = t.left
+        if isinstance(t.right, ProperType):
+            rhs = self.anal_type(t.right)
+        else:
+            rhs = t.right
+        return ComputedType(lhs,rhs,t.op,t.line,t.column)
 
     def analyze_callable_args_for_paramspec(
         self, callable_args: Type, ret_type: Type, fallback: Instance

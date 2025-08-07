@@ -3772,7 +3772,7 @@ class SemanticAnalyzer(
         if s.type:
             lvalue = s.lvalues[-1]
             allow_tuple_literal = isinstance(lvalue, TupleExpr)
-            analyzed = self.anal_type(s.type, allow_tuple_literal=allow_tuple_literal)
+            analyzed = self.anal_type(s.type, allow_tuple_literal=allow_tuple_literal) # TODO: wedge in here if analyzed is a unit
             # Don't store not ready types (including placeholders).
             if analyzed is None or has_placeholder(analyzed):
                 self.defer(s)
