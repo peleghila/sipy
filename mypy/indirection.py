@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Iterable, Set
 
 import mypy.types as types
-from mypy.types import TypeVisitor
+from mypy.types import TypeVisitor, ComputedType, CompoundType
 from mypy.util import split_module_names
 
 
@@ -119,3 +119,13 @@ class TypeIndirectionVisitor(TypeVisitor[Set[str]]):
 
     def visit_type_alias_type(self, t: types.TypeAliasType) -> set[str]:
         return self._visit(types.get_proper_type(t))
+
+    def visit_computed_type(self, t: ComputedType):
+        out = self._visit(t.left)
+        out.update(self._visit(t.right))
+        return out
+
+    def visit_compound_type(self, t: CompoundType):
+        out = self._visit(t.base_type)
+        out.update(self._visit(t.numeric_type))
+        return out

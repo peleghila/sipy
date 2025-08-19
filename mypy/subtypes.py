@@ -68,7 +68,7 @@ from mypy.types import (
     find_unpack_in_list,
     get_proper_type,
     is_named_instance,
-    split_with_prefix_and_suffix,
+    split_with_prefix_and_suffix, CompoundType,
 )
 from mypy.types_utils import flatten_types
 from mypy.typestate import SubtypeKind, type_state
@@ -1109,6 +1109,14 @@ class SubtypeVisitor(TypeVisitor[bool]):
 
     def visit_type_alias_type(self, left: TypeAliasType) -> bool:
         assert False, f"This should be never called, got {left}"
+
+    def visit_compound_type(self, left: CompoundType):
+        right = self.right
+        if isinstance(right, Instance) and right.type._fullname == "builtins.object":
+            return True
+        if isinstance(right, CompoundType):
+            return self._is_subtype(left.base_type,right.base_type) and self._is_subtype(left.numeric_type,right.numeric_type)
+        return False
 
 
 T = TypeVar("T", bound=Type)

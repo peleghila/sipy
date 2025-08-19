@@ -383,7 +383,7 @@ def check_type_arguments(graph: Graph, scc: list[str], errors: Errors) -> None:
             errors,
             state.options,
             state.tree.is_typeshed_file(state.options),
-            state.manager.semantic_analyzer.named_type,
+            state.manager,
         )
         with state.wrap_context():
             with mypy.state.state.strict_optional_set(state.options.strict_optional):
@@ -402,7 +402,7 @@ def check_type_arguments_in_targets(
         errors,
         state.options,
         is_typeshed_file(state.options.abs_custom_typeshed_dir, state.path or ""),
-        state.manager.semantic_analyzer.named_type,
+        state
     )
     with state.wrap_context():
         with mypy.state.state.strict_optional_set(state.options.strict_optional):

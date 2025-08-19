@@ -7,9 +7,12 @@ operations, including subtype checks.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, TYPE_CHECKING
 
 from mypy import errorcodes as codes, message_registry
+
+if TYPE_CHECKING:
+    from mypy.build import BuildManager
 from mypy.errorcodes import ErrorCode
 from mypy.errors import Errors
 from mypy.message_registry import INVALID_PARAM_SPEC_LOCATION, INVALID_PARAM_SPEC_LOCATION_NOTE
@@ -37,7 +40,7 @@ from mypy.types import (
     flatten_nested_tuples,
     get_proper_type,
     get_proper_types,
-    split_with_prefix_and_suffix,
+    split_with_prefix_and_suffix, CompoundType,
 )
 from mypy.typevartuples import erased_vars
 
@@ -48,13 +51,15 @@ class TypeArgumentAnalyzer(MixedTraverserVisitor):
         errors: Errors,
         options: Options,
         is_typeshed_file: bool,
-        named_type: Callable[[str, list[Type]], Instance],
+        #named_type: Callable[[str, list[Type]], Instance],
+        manager: BuildManager,
     ) -> None:
         super().__init__()
         self.errors = errors
         self.options = options
         self.is_typeshed_file = is_typeshed_file
-        self.named_type = named_type
+        self.manager = manager
+        self.named_type = manager.semantic_analyzer.named_type
         self.scope = Scope()
         # Should we also analyze function definitions, or only module top-levels?
         self.recurse_into_functions = True
@@ -132,6 +137,16 @@ class TypeArgumentAnalyzer(MixedTraverserVisitor):
                 if isinstance(unpacked, Instance):
                     assert unpacked.type.fullname == "builtins.tuple"
                     t.args = unpacked.args
+
+    def visit_compound_type(self, t: CompoundType) -> None:
+        super().visit_compound_type(t)
+        base_name = str(t.base_type) #TODO: print
+        # self.manager.modules['src.SUnit1.SIUnit'].names['SIUnit'].node
+        from mypy.sipy import get_base_type
+        base_info = get_base_type(self.manager.modules)
+        _, is_invalid = self.validate_args(base_name, (t.numeric_type,), base_info.type_vars, t)
+        if is_invalid:
+            t.args = tuple(erased_vars([], TypeOfAny.from_error))
 
     def validate_args(
         self, name: str, args: tuple[Type, ...], type_vars: list[TypeVarLikeType], ctx: Context

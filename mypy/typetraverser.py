@@ -32,7 +32,7 @@ from mypy.types import (
     UnboundType,
     UninhabitedType,
     UnionType,
-    UnpackType,
+    UnpackType, ComputedType, CompoundType,
 )
 
 
@@ -140,6 +140,16 @@ class TypeTraverserVisitor(SyntheticTypeVisitor[None]):
 
     def visit_unpack_type(self, t: UnpackType) -> None:
         t.type.accept(self)
+
+    def visit_computed_type(self, t: ComputedType) -> None:
+        if isinstance(t.left,Type):
+            t.left.accept(self)
+        if isinstance(t.right, Type):
+            t.right.accept(self)
+
+    def visit_compound_type(self, t: CompoundType) -> None:
+        t.base_type.accept(self)
+        t.numeric_type.accept(self)
 
     # Helpers
 
