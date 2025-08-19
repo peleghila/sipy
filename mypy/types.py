@@ -1022,7 +1022,7 @@ class ComputedType(ProperType):
         self,
         left: ProperType | int | float,
         right: ProperType | int | float,
-        op: operator,
+        op: str,
         line: int = -1,
         column: int = -1,
     ) -> None:
@@ -1062,7 +1062,7 @@ class CompoundType(ProperType):
         self.base_type = base
         self.numeric_type = numeric
         if isinstance(self.base_type, Instance):
-            assert(len(self.base_type.args) == 1)
+            assert(len(self.base_type.args) <= 1)
             self.base_type.args = ()
 
     def accept(self, visitor: TypeVisitor[T]) -> T:

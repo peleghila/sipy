@@ -182,7 +182,7 @@ from mypy.types import (
     get_proper_types,
     has_recursive_types,
     is_named_instance,
-    split_with_prefix_and_suffix,
+    split_with_prefix_and_suffix, CompoundType, ComputedType,
 )
 from mypy.types_utils import (
     is_generic_instance,
@@ -4096,11 +4096,20 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         """
 
         if allow_reverse:
-            left_variants = [base_type]
-            base_type = get_proper_type(base_type)
-            if isinstance(base_type, UnionType):
-                left_variants = list(flatten_nested_unions(base_type.relevant_items()))
-            right_type = self.accept(arg)
+            if isinstance(base_type, CompoundType):
+                _base_type = base_type.numeric_type
+            else:
+                _base_type = base_type
+
+            left_variants = [_base_type]
+            _base_type = get_proper_type(_base_type)
+            if isinstance(_base_type, UnionType):
+                left_variants = list(flatten_nested_unions(_base_type.relevant_items()))
+            _right_type = self.accept(arg)
+            if isinstance(_right_type,CompoundType):
+                right_type = _right_type.numeric_type
+            else:
+                right_type = _right_type
 
             # Step 1: We first try leaving the right arguments alone and destructure
             # just the left ones. (Mypy can sometimes perform some more precise inference
@@ -4124,6 +4133,20 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             if not local_errors.has_new_errors():
                 results_final = make_simplified_union(all_results)
                 inferred_final = make_simplified_union(all_inferred)
+                if isinstance(base_type,CompoundType) or is_named_instance(_right_type,CompoundType):
+                    new_base_type = self.make_computed_type(
+                        op_name=method,
+                        left_type=base_type,
+                        right_type=_right_type, #original
+                        context=context,
+                    )
+                    assert (inferred_final.ret_type == results_final)
+                    results_final = CompoundType(new_base_type,results_final)
+                    inferred_final = inferred_final.copy_modified(
+                        arg_types = inferred_final.arg_types if not isinstance(_right_type,CompoundType) else [CompoundType(_right_type.base_type,inferred_final.arg_types[0])],
+                        ret_type = results_final,
+                        bound_args = inferred_final.bound_args if not isinstance(_right_type,CompoundType) else [CompoundType(_right_type.base_type,inferred_final.bound_args[0])],
+                    )
                 return results_final, inferred_final
 
             # Step 2: If that fails, we try again but also destructure the right argument.
@@ -4172,7 +4195,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 if len(left_variants) >= 2 and len(right_variants) >= 2:
                     self.msg.warn_both_operands_are_from_unions(recent_context)
                 elif len(left_variants) >= 2:
-                    self.msg.warn_operand_was_from_union("Left", base_type, context=recent_context)
+                    self.msg.warn_operand_was_from_union("Left", _base_type, context=recent_context)
                 elif len(right_variants) >= 2:
                     self.msg.warn_operand_was_from_union(
                         "Right", right_type, context=recent_context
@@ -4183,6 +4206,22 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             # callable types.
             results_final = make_simplified_union(all_results)
             inferred_final = self.combine_function_signatures(get_proper_types(all_inferred))
+            if isinstance(base_type, CompoundType) or is_named_instance(_right_type, CompoundType):
+                new_base_type = self.make_computed_type(
+                    op_name=method,
+                    left_type=base_type,
+                    right_type=_right_type,  # original
+                    context=context,
+                )
+                assert (inferred_final.ret_type == results_final)
+                results_final = CompoundType(new_base_type, results_final)
+                inferred_final = inferred_final.copy_modified(
+                    arg_types=inferred_final.arg_types if not isinstance(_right_type, CompoundType) else [
+                        CompoundType(_right_type.base_type, inferred_final.arg_types[0])],
+                    ret_type=results_final,
+                    bound_args=inferred_final.bound_args if not isinstance(_right_type, CompoundType) else [
+                        CompoundType(_right_type.base_type, inferred_final.bound_args[0])],
+                )
             return results_final, inferred_final
         else:
             return self.check_method_call_by_name(
@@ -6239,6 +6278,21 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             and (callee_type.item.type.is_abstract or callee_type.item.type.is_protocol)
             and not self.chk.allow_abstract_call
         )
+
+    def make_computed_type(self, op_name: str, left_type: Type, right_type: Type, context: Context) -> Type:
+        if not isinstance(left_type,CompoundType):
+            return right_type.base_type
+        elif not isinstance(right_type, CompoundType):
+            return left_type.base_type
+        else: # do the op
+            left_base = left_type.base_type
+            right_base = right_type.base_type
+            return ComputedType(
+                left_base,
+                right_base,
+                operators.op_methods_to_symbols[op_name]
+            )
+
 
 
 def has_any_type(t: Type, ignore_in_type_obj: bool = False) -> bool:

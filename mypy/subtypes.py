@@ -68,7 +68,7 @@ from mypy.types import (
     find_unpack_in_list,
     get_proper_type,
     is_named_instance,
-    split_with_prefix_and_suffix, CompoundType,
+    split_with_prefix_and_suffix, CompoundType, ComputedType,
 )
 from mypy.types_utils import flatten_types
 from mypy.typestate import SubtypeKind, type_state
@@ -1117,6 +1117,16 @@ class SubtypeVisitor(TypeVisitor[bool]):
         if isinstance(right, CompoundType):
             return self._is_subtype(left.base_type,right.base_type) and self._is_subtype(left.numeric_type,right.numeric_type)
         return False
+
+    def visit_computed_type(self, t: ComputedType) -> bool:
+        def is_same_base_type(lhs: Type | int | float, rhs: Type | int | float) -> bool:
+            if isinstance(lhs, ComputedType) and isinstance(rhs,ComputedType):
+                return lhs.op == rhs.op and is_same_base_type(lhs.left,rhs.left) and is_same_base_type(lhs.right, rhs.right)
+            else:
+                return lhs == rhs # TODO: do we want 2 == 2.0?
+
+        right = self.right
+        return is_same_base_type(t,right)
 
 
 T = TypeVar("T", bound=Type)

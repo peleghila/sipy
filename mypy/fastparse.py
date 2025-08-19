@@ -1990,6 +1990,11 @@ class TypeConverter:
     def visit_Name(self, n: Name) -> Type:
         return UnboundType(n.id, line=self.line, column=self.convert_column(n.col_offset))
 
+    binop = { #Stolen from python's ast.py
+        "Mult": "*",
+        "Div": "/",
+        "Pow": "**",
+    }
     def visit_BinOp(self, n: ast3.BinOp) -> Type:
         if isinstance(n.op, ast3.BitOr):
             left = self.visit(n.left)
@@ -2010,7 +2015,7 @@ class TypeConverter:
             if isinstance(right,RawExpressionType):
                 right = right.literal_value
             return ComputedType(
-                left, right, n.op,
+                left, right, self.binop[n.op.__class__.__name__],
                 line=self.line,
                 column=self.convert_column(n.col_offset)
             )
