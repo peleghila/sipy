@@ -608,7 +608,7 @@ class BoolTypeQuery(SyntheticTypeVisitor[bool]):
         return self.query_types([t.numeric_type,t.base_type])
 
     def visit_computed_type(self, t: ComputedType):
-        return self.query_types([t.left, t.right])
+        return self.query_types([x for x in [t.left, t.right] if isinstance(x, Type)])
 
     def query_types(self, types: list[Type] | tuple[Type, ...]) -> bool:
         """Perform a query for a sequence of types using the strategy to combine the results."""

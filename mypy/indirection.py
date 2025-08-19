@@ -121,8 +121,11 @@ class TypeIndirectionVisitor(TypeVisitor[Set[str]]):
         return self._visit(types.get_proper_type(t))
 
     def visit_computed_type(self, t: ComputedType):
-        out = self._visit(t.left)
-        out.update(self._visit(t.right))
+        out = set()
+        if isinstance(t.left, types.ProperType):
+            out = self._visit(t.left)
+        if isinstance(t.right, types.ProperType):
+            out.update(self._visit(t.right))
         return out
 
     def visit_compound_type(self, t: CompoundType):

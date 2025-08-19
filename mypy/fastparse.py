@@ -2003,6 +2003,12 @@ class TypeConverter:
         if isinstance(n.op,(ast3.Mult, ast3.Pow, ast3.Div)):
             left = self.visit(n.left)
             right = self.visit(n.right)
+            if isinstance(left,RawExpressionType) and isinstance(right,RawExpressionType):
+                return self.invalid_type(n)
+            if isinstance(left,RawExpressionType):
+                left = left.literal_value
+            if isinstance(right,RawExpressionType):
+                right = right.literal_value
             return ComputedType(
                 left, right, n.op,
                 line=self.line,

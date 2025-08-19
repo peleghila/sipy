@@ -1027,6 +1027,14 @@ class ComputedType(ProperType):
         column: int = -1,
     ) -> None:
         super().__init__(line, column)
+        assert(isinstance(left, ProperType) or isinstance(right, ProperType))
+        # if isinstance(left,ProperType):
+        #     assert(isinstance(left,Instance) or isinstance(left, UnboundType) or isinstance(left, ComputedType))
+        if isinstance(left,Instance):
+            left.args = ()
+        if isinstance(right,Instance):
+            right.args = ()
+
         self.left = left
         self.right = right
         self.op = op
@@ -1053,6 +1061,9 @@ class CompoundType(ProperType):
         super().__init__(line, column)
         self.base_type = base
         self.numeric_type = numeric
+        if isinstance(self.base_type, Instance):
+            assert(len(self.base_type.args) == 1)
+            self.base_type.args = ()
 
     def accept(self, visitor: TypeVisitor[T]) -> T:
         return visitor.visit_compound_type(self)
@@ -3582,7 +3593,7 @@ class TypeStrVisitor(SyntheticTypeVisitor[str]):
         return f"Unpack[{t.type.accept(self)}]"
 
     def visit_computed_type(self, t: ComputedType):
-        return f"Computed({t.left.accept(self)}{t.op}{t.right.accept(self)})"
+        return f"Computed({t.left.accept(self) if isinstance(t.left,Type) else t.left}{t.op}{t.right.accept(self)  if isinstance(t.right,Type) else t.right})"
 
     def visit_compound_type(self, t: CompoundType):
         return f"Compound({t.base_type.accept(self)}[{t.numeric_type.accept(self)}])"
