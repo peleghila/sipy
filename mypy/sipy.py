@@ -5,4 +5,7 @@ base_type_module, base_type_classname = base_type_name.rsplit('.', maxsplit=1)
 base_type_filename = "D:\\code\\units1\\src\\SUnit1\\SIUnit.py"
 
 def get_base_type(modules: dict[str,MypyFile]):
-    return modules[base_type_module].names[base_type_classname].node
+    module = modules[base_type_module]
+    if base_type_classname not in module.names:
+        return None
+    return module.names[base_type_classname].node

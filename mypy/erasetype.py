@@ -32,7 +32,7 @@ from mypy.types import (
     UnionType,
     UnpackType,
     get_proper_type,
-    get_proper_types,
+    get_proper_types, CompoundType, ComputedType,
 )
 from mypy.typevartuples import erased_vars
 
@@ -138,6 +138,13 @@ class EraseTypeVisitor(TypeVisitor[ProperType]):
     def visit_type_alias_type(self, t: TypeAliasType) -> ProperType:
         raise RuntimeError("Type aliases should be expanded before accepting this visitor")
 
+    def visit_computed_type(self, t: ComputedType):
+        # TODO: need to erase this at creation though
+        assert(False, "should always be under a compound type")
+
+    def visit_compound_type(self, t: CompoundType):
+        return t # this parametrization is crucial so not touching it
+
 
 def erase_typevars(t: Type, ids_to_erase: Container[TypeVarId] | None = None) -> Type:
     """Replace all type variables in a type with any,
@@ -216,6 +223,12 @@ class TypeVarEraser(TypeTranslator):
         # Type alias target can't contain bound type variables (not bound by the type
         # alias itself), so it is safe to just erase the arguments.
         return t.copy_modified(args=[a.accept(self) for a in t.args])
+
+    # TODO: get rid later
+    def visit_compound_type(self, t: CompoundType):
+        pass
+    def visit_computed_type(self, t: ComputedType):
+        pass
 
 
 def remove_instance_last_known_values(t: Type) -> Type:

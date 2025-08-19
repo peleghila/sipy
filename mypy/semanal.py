@@ -292,7 +292,7 @@ from mypy.types import (
     get_proper_types,
     is_named_instance,
     remove_dups,
-    type_vars_as_args,
+    type_vars_as_args, CompoundType,
 )
 from mypy.types_utils import is_invalid_recursive_alias, store_argument_type
 from mypy.typevars import fill_typevars
@@ -3772,11 +3772,24 @@ class SemanticAnalyzer(
         if s.type:
             lvalue = s.lvalues[-1]
             allow_tuple_literal = isinstance(lvalue, TupleExpr)
-            analyzed = self.anal_type(s.type, allow_tuple_literal=allow_tuple_literal) # TODO: wedge in here if analyzed is a unit
+            analyzed = self.anal_type(s.type, allow_tuple_literal=allow_tuple_literal)
             # Don't store not ready types (including placeholders).
             if analyzed is None or has_placeholder(analyzed):
                 self.defer(s)
                 return
+            if isinstance(analyzed, Instance):
+                from mypy.sipy import get_base_type
+                sipy_base = get_base_type(self.modules)
+                if sipy_base in analyzed.type.mro: #this is a unit instance
+                    # TODO: error if no numeric base
+                    numeric_base = analyzed.args[0]
+                    # replace with compound type
+                    analyzed = CompoundType(
+                        analyzed,
+                        numeric_base,
+                        analyzed.line,
+                        analyzed.column
+                    )
             s.type = analyzed
             if (
                 self.type
