@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Callable, Sequence, cast
 
-from mypy import meet, message_registry, subtypes
+from mypy import meet, message_registry, subtypes, operators
 from mypy.erasetype import erase_typevars
 from mypy.expandtype import (
     expand_self_type,
@@ -69,7 +69,7 @@ from mypy.types import (
     TypeVarTupleType,
     TypeVarType,
     UnionType,
-    get_proper_type,
+    get_proper_type, CompoundType,
 )
 from mypy.typetraverser import TypeTraverserVisitor
 
@@ -251,6 +251,9 @@ def _analyze_member_access(
     elif isinstance(typ, DeletedType):
         mx.msg.deleted_as_rvalue(typ, mx.context)
         return AnyType(TypeOfAny.from_error)
+    elif isinstance(typ, CompoundType):
+        numeric_member = _analyze_member_access(name,typ.numeric_type,mx,override_info)
+        return numeric_member
     return report_missing_attribute(mx.original_type, typ, name, mx)
 
 
