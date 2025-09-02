@@ -92,7 +92,7 @@ from mypy.types import (
     UnpackType,
     flatten_nested_unions,
     get_proper_type,
-    get_proper_types,
+    get_proper_types, CompoundType, ComputedType,
 )
 from mypy.typetraverser import TypeTraverserVisitor
 from mypy.util import plural_s, unmangle
@@ -2724,6 +2724,14 @@ def format_type_inner(
     elif isinstance(typ, Parameters):
         args = format_callable_args(typ.arg_types, typ.arg_kinds, typ.arg_names, format, verbosity)
         return f"[{args}]"
+    elif isinstance(typ, CompoundType):
+        numeric = format_type_inner(typ.numeric_type,verbosity,options, fullnames, module_names)
+        base = format_type_inner(typ.base_type,verbosity, options, fullnames, module_names)
+        return f"{base}[{numeric}]"
+    elif isinstance(typ, ComputedType):
+        left = format_type_inner(typ.left,verbosity, options, fullnames, module_names)
+        right = format_type_inner(typ.right,verbosity, options, fullnames, module_names)
+        return f"{left}{typ.op}{right}"
     elif typ is None:
         raise RuntimeError("Type is None")
     else:
