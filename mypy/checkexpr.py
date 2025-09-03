@@ -6294,13 +6294,24 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         else: # do the op
             left_base = left_type.base_type
             right_base = right_type.base_type
-            op = operators.op_methods_to_symbols[op_name] if op_name in operators.op_methods_to_symbols else operators.op_methods_to_symbols[operators.normal_from_reverse_op[op_name]]
-            op = '/' if op == '//' else op
-            return ComputedType(
-                left_base,
-                right_base,
-                op
-            )
+            if op_name in operators.op_methods_to_symbols:
+                # Op is not reverse
+                op = operators.op_methods_to_symbols[op_name]
+                op = '/' if op == '//' else op
+                return ComputedType(
+                    left_base,
+                    right_base,
+                    op
+                )
+            else:
+                # Op is reverse, also reverse the operants in the type computation
+                op = operators.op_methods_to_symbols[operators.normal_from_reverse_op[op_name]]
+                op = '/' if op == '//' else op
+                return ComputedType(
+                    right_base,
+                    left_base,
+                    op
+                )
 
 
 
