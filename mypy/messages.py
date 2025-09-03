@@ -2729,8 +2729,18 @@ def format_type_inner(
         base = format_type_inner(typ.base_type,verbosity, options, fullnames, module_names)
         return f"{base}[{numeric}]"
     elif isinstance(typ, ComputedType):
-        left = format_type_inner(typ.left,verbosity, options, fullnames, module_names)
-        right = format_type_inner(typ.right,verbosity, options, fullnames, module_names)
+        if isinstance(typ.left, Type):
+            left = format_type_inner(typ.left,verbosity, options, fullnames, module_names)
+            if isinstance(typ.left, ComputedType):
+                left = f"({left})"
+        else:
+            left = str(typ.left)
+        if isinstance(typ.right, Type):
+            right = format_type_inner(typ.right,verbosity, options, fullnames, module_names)
+            if isinstance(typ.right, ComputedType):
+                right = f"({right})"
+        else:
+            right = str(typ.right)
         return f"{left}{typ.op}{right}"
     elif typ is None:
         raise RuntimeError("Type is None")
