@@ -629,6 +629,18 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             ret_type = make_simplified_union(ret_type.items)
         if isinstance(ret_type, UninhabitedType) and not ret_type.ambiguous:
             self.chk.binder.unreachable()
+        if isinstance(ret_type, Instance):
+            from mypy.sipy import get_base_type
+            sipy_base = get_base_type(self.chk.modules)
+            if sipy_base in ret_type.type.mro:  # this is a unit instance
+                numeric_base = ret_type.args[0]
+                # replace with compound type
+                ret_type = CompoundType(
+                    ret_type,
+                    numeric_base,
+                    ret_type.line,
+                    ret_type.column
+                )
         # Warn on calls to functions that always return None. The check
         # of ret_type is both a common-case optimization and prevents reporting
         # the error in dynamic functions (where it will be Any).
