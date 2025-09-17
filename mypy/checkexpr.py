@@ -107,6 +107,7 @@ from mypy.plugin import (
     Plugin,
 )
 from mypy.semanal_enum import ENUM_BASES
+from mypy.sipy import is_sipy_base
 from mypy.state import state
 from mypy.subtypes import (
     find_member,
@@ -537,9 +538,9 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     and isinstance(node.node, TypeAlias)
                     and not node.node.no_args
                     and not (
-                        isinstance(union_target := get_proper_type(node.node.target), UnionType)
-                        and union_target.uses_pep604_syntax
-                    )
+                    isinstance(union_target := get_proper_type(node.node.target), UnionType)
+                    and union_target.uses_pep604_syntax
+                )
                 ):
                     self.msg.type_arguments_not_allowed(e)
                 if isinstance(typ, RefExpr) and isinstance(typ.node, TypeInfo):
@@ -630,9 +631,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         if isinstance(ret_type, UninhabitedType) and not ret_type.ambiguous:
             self.chk.binder.unreachable()
         if isinstance(ret_type, Instance):
-            from mypy.sipy import get_base_type
-            sipy_base = get_base_type(self.chk.modules)
-            if sipy_base in ret_type.type.mro:  # this is a unit instance
+            if is_sipy_base(ret_type):
                 numeric_base = ret_type.args[0]
                 # replace with compound type
                 ret_type = CompoundType(

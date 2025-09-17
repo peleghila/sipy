@@ -228,6 +228,7 @@ from mypy.semanal_shared import (
     set_callable_name as set_callable_name,
 )
 from mypy.semanal_typeddict import TypedDictAnalyzer
+from mypy.sipy import is_sipy_base
 from mypy.tvar_scope import TypeVarLikeScope
 from mypy.typeanal import (
     SELF_TYPE_NAMES,
@@ -3778,9 +3779,7 @@ class SemanticAnalyzer(
                 self.defer(s)
                 return
             if isinstance(analyzed, Instance):
-                from mypy.sipy import get_base_type
-                sipy_base = get_base_type(self.modules)
-                if sipy_base in analyzed.type.mro: #this is a unit instance
+                if is_sipy_base(analyzed):
                     # TODO: error if no numeric base
                     numeric_base = analyzed.args[0]
                     # replace with compound type

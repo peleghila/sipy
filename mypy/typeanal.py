@@ -113,6 +113,8 @@ from mypy.types import (
 from mypy.types_utils import is_bad_type_type_item
 from mypy.typevars import fill_typevars
 
+from mypy.sipy import is_sipy_base
+
 T = TypeVar("T")
 
 type_constructors: Final = {
@@ -1389,19 +1391,37 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
             return self.analyze_type_with_type_info(n.node, t.args, t, False)
 
     def visit_compound_type(self, t: CompoundType) -> Type:
+        base = self.anal_type(t.base_type)
+
+        if isinstance(base,AnyType):
+            self.fail("Invalid type comment or annotation", t, code=codes.VALID_TYPE)
+            return AnyType(TypeOfAny.from_error, line=base.line, column=base.column)
+
+        numeric = self.anal_type(t.numeric_type)
+        if isinstance(numeric, AnyType):
+            self.fail("Invalid type comment or annotation", t, code=codes.VALID_TYPE)
+            return AnyType(TypeOfAny.from_error, line=numeric.line, column=numeric.column)
         return CompoundType(
-            self.anal_type(t.base_type),
-            self.anal_type(t.numeric_type),
+            base,
+            numeric,
             t.line,
             t.column
         )
     def visit_computed_type(self, t: ComputedType) -> Type:
         if isinstance(t.left,ProperType):
             lhs = self.anal_type(t.left)
+            if not is_sipy_base(lhs):
+                if self.report_invalid_types:
+                    self.fail("Invalid type comment or annotation", lhs, code=codes.VALID_TYPE)
+                return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
         else:
             lhs = t.left
         if isinstance(t.right, ProperType):
             rhs = self.anal_type(t.right)
+            if not is_sipy_base(rhs):
+                if self.report_invalid_types:
+                    self.fail("Invalid type comment or annotation", rhs, code=codes.VALID_TYPE)
+                return AnyType(TypeOfAny.from_error, line=rhs.line, column=rhs.column)
         else:
             rhs = t.right
         return ComputedType(lhs,rhs,t.op,t.line,t.column)
