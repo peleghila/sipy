@@ -1,5 +1,5 @@
 from mypy.nodes import MypyFile
-from mypy.types import Instance, ProperType, AnyType
+from mypy.types import Instance, ProperType, AnyType, ComputedType
 
 base_type_name = "src.SUnit1.SIUnit.SIUnit"
 base_type_module, base_type_classname = base_type_name.rsplit('.', maxsplit=1)
@@ -17,7 +17,10 @@ def get_base_type(modules: dict[str,MypyFile]):
 def is_sipy_base(candidate: ProperType) -> bool:
     if isinstance(candidate, Instance):
         return candidate.type.has_base(base_type_name)
-    if isinstance(candidate, AnyType):
+    elif isinstance(candidate, AnyType):
         return False
+    elif isinstance(candidate, ComputedType):
+        return ((is_sipy_base(candidate.left) if isinstance(candidate.left, ProperType) else True) and
+                (is_sipy_base(candidate.right) if isinstance(candidate.right, ProperType) else True))
     assert(False)
 
