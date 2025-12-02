@@ -3917,6 +3917,50 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             if not self.has_member(base_type, op_name):
                 return None
 
+            # if either side is a si, rip it out and leave the numeric
+            # and recompose later
+
+            def deunit_instance(t:Type) -> (Type, List[Type]):
+                if isinstance(t, Instance):
+                    if not t.args:
+                        return t,[]
+                    else:
+                        new_args = []
+                        collected_units = []
+                        for a in t.args:
+                            if is_sipy_base(a):
+                                # separate out the unit
+                                if isinstance(a,CompoundType):
+                                    new_args.append(a.numeric_type)
+                                    collected_units.append(a.base_type)
+                                elif isinstance(a,Instance):
+                                    assert(len(a.args) == 1)
+                                    new_args.append(a.args[0])
+                                    collected_units.append(a.copy_modified(args=()))
+                            else:
+                                new_a,a_units = deunit_instance(a)
+                                new_args.append(new_a)
+                                collected_units.extend(a_units)
+                        new_t = t.copy_modified(args=tuple(new_args))
+                        return new_t, collected_units
+                else:
+                    return t,[]
+            def split_unit_type(t: Type) -> (Type,Type|None):
+                if isinstance(t, CompoundType):
+                    return t.numeric_type, t.base_type
+                elif isinstance(t, Instance):
+                    if t.args:
+                        new_t,units = deunit_instance(t)
+                        assert(len(units) <= 1)
+                        return new_t,units[0]
+                    return t,None
+                else:
+                    return t,None
+
+            other_type = left_type if base_type == right_type else right_type
+            base_type, base_unit = split_unit_type(base_type)
+            other_type, other_unit = split_unit_type(other_type)
+
             with self.msg.filter_errors() as w:
                 member = analyze_member_access(
                     name=op_name,
@@ -3932,40 +3976,44 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 )
                 if w.has_new_errors():
                     return None
-                elif isinstance(left_type, CompoundType) or isinstance(right_type, CompoundType):
-                    assert(isinstance(member,CallableType) and member.bound_args[0] == base_type)
+                elif base_unit or other_unit: #units are involved
+                    assert (isinstance(member, CallableType) and member.bound_args[0] == base_type)
+                    # modify all the args of member
                     if op_name in {'__mul__','__rmul__','__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__','__pow__','__rpow__'}:
                         # differentiate *, **, / from other ops
-                        other_type = left_type if base_type == right_type else right_type
-                        if isinstance(other_type,CompoundType):
+                        if other_unit:
                             return member.copy_modified(
                                 ret_type=CompoundType(
-                                    self.make_computed_type(op_name,base_type,other_type,context),
+                                    self.make_computed_type(op_name, base_unit, other_unit, context),
                                     member.ret_type
                                 ),
-                                arg_types=[CompoundType(other_type.base_type,a) for a in member.arg_types]
+                                arg_types=[CompoundType(other_unit, a) for a in member.arg_types]
                             )
                         else:
                             # Adjust return type to base, finish
                             return member.copy_modified(
                                 ret_type=CompoundType(
-                                    base_type.base_type,
+                                    base_unit,
                                     member.ret_type,
                                 ))
                     else:
                         # Everything is based on base_type or error
-                        if not isinstance(base_type, CompoundType):
+                        if not base_unit:
                             return member
                         else:
                             return member.copy_modified(
                                 ret_type=CompoundType(
-                                    base_type.base_type,
+                                    base_unit,
                                     member.ret_type
                                 ),
-                                arg_types=[CompoundType(base_type.base_type,a) for a in member.arg_types]
+                                arg_types=[CompoundType(base_unit, a) for a in member.arg_types]
                             )
                 else:
                     return member
+
+
+
+
 
         def lookup_definer(typ: Instance, attr_name: str) -> str | None:
             """Returns the name of the class that contains the actual definition of attr_name.
@@ -6298,20 +6346,18 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         )
 
     def make_computed_type(self, op_name: str, left_type: Type, right_type: Type, context: Context) -> Type:
-        if not isinstance(left_type,CompoundType):
-            return right_type.base_type
-        elif not isinstance(right_type, CompoundType):
-            return left_type.base_type
+        if not left_type:
+            return right_type
+        elif not right_type:
+            return left_type
         else: # do the op
-            left_base = left_type.base_type
-            right_base = right_type.base_type
             if op_name in operators.op_methods_to_symbols:
                 # Op is not reverse
                 op = operators.op_methods_to_symbols[op_name]
                 op = '/' if op == '//' else op
                 return ComputedType(
-                    left_base,
-                    right_base,
+                    left_type,
+                    right_type,
                     op
                 )
             else:
@@ -6319,8 +6365,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 op = operators.op_methods_to_symbols[operators.normal_from_reverse_op[op_name]]
                 op = '/' if op == '//' else op
                 return ComputedType(
-                    right_base,
-                    left_base,
+                    right_type,
+                    left_type,
                     op
                 )
 

@@ -252,8 +252,9 @@ def _analyze_member_access(
         mx.msg.deleted_as_rvalue(typ, mx.context)
         return AnyType(TypeOfAny.from_error)
     elif isinstance(typ, CompoundType):
-        numeric_member = _analyze_member_access(name,typ.numeric_type,mx,override_info)
-        return numeric_member
+        # numeric_member = _analyze_member_access(name,typ.numeric_type,mx,override_info)
+        # return numeric_member
+        assert(False,"shouldn't be here")
     return report_missing_attribute(mx.original_type, typ, name, mx)
 
 

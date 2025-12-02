@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Callable, TYPE_CHECKING
 
 from mypy import errorcodes as codes, message_registry
+from mypy.sipy import is_sipy_base
 
 if TYPE_CHECKING:
     from mypy.build import BuildManager
@@ -212,6 +213,12 @@ class TypeArgumentAnalyzer(MixedTraverserVisitor):
                     type(upper_bound) is Instance
                     and upper_bound.type.fullname == "builtins.object"
                 )
+                if upper_bound.type.fullname == "numpy.generic" and is_sipy_base(arg):
+                    if isinstance(arg,CompoundType):
+                        arg = arg.numeric_type
+                    else:
+                        assert(isinstance(arg, Instance))
+                        arg = arg.args[0]
                 if not object_upper_bound and not is_subtype(arg, upper_bound):
                     if self.in_type_alias_expr and isinstance(arg, TypeVarType):
                         # Type aliases are allowed to use unconstrained type variables
