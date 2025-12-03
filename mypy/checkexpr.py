@@ -3934,7 +3934,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                                     new_args.append(a.numeric_type)
                                     collected_units.append(a.base_type)
                                 elif isinstance(a,Instance):
-                                    assert(len(a.args) == 1)
+                                    assert len(a.args) == 1
                                     new_args.append(a.args[0])
                                     collected_units.append(a.copy_modified(args=()))
                             else:
@@ -3951,7 +3951,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 elif isinstance(t, Instance):
                     if t.args:
                         new_t,units = deunit_instance(t)
-                        assert(len(units) <= 1)
+                        assert len(units) <= 1
                         return new_t,units[0]
                     return t,None
                 else:

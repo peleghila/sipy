@@ -217,7 +217,7 @@ class TypeArgumentAnalyzer(MixedTraverserVisitor):
                     if isinstance(arg,CompoundType):
                         arg = arg.numeric_type
                     else:
-                        assert(isinstance(arg, Instance))
+                        assert isinstance(arg, Instance), str(arg)
                         arg = arg.args[0]
                 if not object_upper_bound and not is_subtype(arg, upper_bound):
                     if self.in_type_alias_expr and isinstance(arg, TypeVarType):

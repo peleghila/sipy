@@ -140,7 +140,7 @@ class EraseTypeVisitor(TypeVisitor[ProperType]):
 
     def visit_computed_type(self, t: ComputedType):
         # TODO: need to erase this at creation though
-        assert(False, "should always be under a compound type")
+        assert False, "should always be under a compound type"
 
     def visit_compound_type(self, t: CompoundType):
         return t # this parametrization is crucial so not touching it

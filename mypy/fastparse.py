@@ -2133,7 +2133,7 @@ class TypeConverter:
             )
         elif isinstance(value, ComputedType):
             # compound type, e.g., Km [ int ].
-            assert(len(params) == 1)
+            assert len(params) == 1
             return CompoundType(
                 value,
                 params[0],

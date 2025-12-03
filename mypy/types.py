@@ -1027,8 +1027,8 @@ class ComputedType(ProperType):
         column: int = -1,
     ) -> None:
         super().__init__(line, column)
-        assert(isinstance(left, ProperType) or isinstance(right, ProperType))
-        assert(not isinstance(left,AnyType) and not isinstance(right,AnyType))
+        assert isinstance(left, ProperType) or isinstance(right, ProperType)
+        assert not isinstance(left,AnyType) and not isinstance(right,AnyType)
         # if isinstance(left,ProperType):
         #     assert(isinstance(left,Instance) or isinstance(left, UnboundType) or isinstance(left, ComputedType))
         if isinstance(left,Instance):
@@ -1060,12 +1060,12 @@ class CompoundType(ProperType):
         column: int = -1,
     ) -> None:
         super().__init__(line, column)
-        assert(not isinstance(base, AnyType))
-        assert (not isinstance(numeric, AnyType))
+        assert not isinstance(base, AnyType)
+        assert not isinstance(numeric, AnyType)
         self.base_type = base
         self.numeric_type = numeric
         if isinstance(self.base_type, Instance):
-            assert(len(self.base_type.args) <= 1)
+            assert len(self.base_type.args) <= 1, str(self.base_type)
             self.base_type.args = ()
 
     def accept(self, visitor: TypeVisitor[T]) -> T:
