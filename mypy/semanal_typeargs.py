@@ -213,7 +213,7 @@ class TypeArgumentAnalyzer(MixedTraverserVisitor):
                     type(upper_bound) is Instance
                     and upper_bound.type.fullname == "builtins.object"
                 )
-                if upper_bound.type.fullname == "numpy.generic" and is_sipy_base(arg):
+                if hasattr(upper_bound, 'type') and upper_bound.type.fullname == "numpy.generic" and is_sipy_base(arg):
                     if isinstance(arg,CompoundType):
                         arg = arg.numeric_type
                     else:

@@ -3897,6 +3897,48 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             object_type=base_type,
         )
 
+    def unit_modify(self, member: CallableType,
+                    op_name: str,
+                    base_type: ProperType,
+                    base_unit: ProperType,
+                    other_unit: ProperType,
+                    context: Context) -> CallableType:
+        assert is_subtype(base_type,member.bound_args[0])
+        # modify all the args of member
+        if op_name in {'__mul__', '__rmul__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__', '__pow__',
+                       '__rpow__'}:
+            # differentiate *, **, / from other ops
+            if other_unit:
+                return member.copy_modified(
+                    #if you've reached Any, just stay at Any no units
+                    ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
+                        self.make_computed_type(op_name, base_unit, other_unit, context),
+                        member.ret_type
+                    ),
+                    arg_types=[a if isinstance(a, AnyType) else CompoundType(other_unit, a) for a in member.arg_types]
+                )
+            else:
+                # Adjust return type to base, finish
+                return member.copy_modified(
+                    # if you've reached Any, just stay at Any no units
+                    ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
+                        base_unit,
+                        member.ret_type,
+                    ))
+        else:
+            # Everything is based on base_type or error
+            if not base_unit:
+                return member
+            else:
+                # if you've reached Any, just stay at Any no units
+                return member.copy_modified(
+                    ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
+                        base_unit,
+                        member.ret_type
+                    ),
+                    arg_types=[a if isinstance(a, AnyType) else CompoundType(base_unit, a) for a in member.arg_types]
+                )
+
     def check_op_reversible(
         self,
         op_name: str,
@@ -3977,37 +4019,16 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 if w.has_new_errors():
                     return None
                 elif base_unit or other_unit: #units are involved
-                    assert (isinstance(member, CallableType) and member.bound_args[0] == base_type)
-                    # modify all the args of member
-                    if op_name in {'__mul__','__rmul__','__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__','__pow__','__rpow__'}:
-                        # differentiate *, **, / from other ops
-                        if other_unit:
-                            return member.copy_modified(
-                                ret_type=CompoundType(
-                                    self.make_computed_type(op_name, base_unit, other_unit, context),
-                                    member.ret_type
-                                ),
-                                arg_types=[CompoundType(other_unit, a) for a in member.arg_types]
-                            )
-                        else:
-                            # Adjust return type to base, finish
-                            return member.copy_modified(
-                                ret_type=CompoundType(
-                                    base_unit,
-                                    member.ret_type,
-                                ))
+                    if isinstance(member,CallableType):
+                        return self.unit_modify(member,op_name,base_type,base_unit,other_unit,context)
+                    elif isinstance(member, Overloaded):
+                        assert all(is_subtype(base_type, i.bound_args[0]) for i in member.items), (str(member.items), base_type)
+                        # do same thing for each and repackage
+                        new_items = [self.unit_modify(i,op_name,base_type,base_unit,other_unit,context)
+                                     for i in member.items]
+                        return Overloaded(new_items)
                     else:
-                        # Everything is based on base_type or error
-                        if not base_unit:
-                            return member
-                        else:
-                            return member.copy_modified(
-                                ret_type=CompoundType(
-                                    base_unit,
-                                    member.ret_type
-                                ),
-                                arg_types=[CompoundType(base_unit, a) for a in member.arg_types]
-                            )
+                        assert False, type(member)
                 else:
                     return member
 
