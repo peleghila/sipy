@@ -3908,14 +3908,14 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         if op_name in {'__mul__', '__rmul__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__', '__pow__',
                        '__rpow__'}:
             # differentiate *, **, / from other ops
-            if other_unit:
+            if other_unit or op_name in {'__pow__','__rpow__'}:
                 return member.copy_modified(
                     #if you've reached Any, just stay at Any no units
                     ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
                         self.make_computed_type(op_name, base_unit, other_unit, context),
                         member.ret_type
                     ),
-                    arg_types=[a if isinstance(a, AnyType) else CompoundType(other_unit, a) for a in member.arg_types]
+                    arg_types=[a if (isinstance(a, AnyType) or not other_unit) else CompoundType(other_unit, a) for a in member.arg_types]
                 )
             else:
                 # Adjust return type to base, finish
@@ -6367,10 +6367,35 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         )
 
     def make_computed_type(self, op_name: str, left_type: Type, right_type: Type, context: Context) -> Type:
+        def get_k() -> int | float | None:
+            assert isinstance(context, OpExpr)
+            k_in = context.left if not left_type else context.right
+            if isinstance(k_in, FloatExpr):
+                return k_in.value
+            if isinstance(k_in, IntExpr):
+                return k_in.value
+            return None
+
         if not left_type:
-            return right_type
+            if op_name == '__pow__': # k^Sec?
+                assert False # is this a thing
+            elif op_name == '__rpow__': # Sec^k
+                return ComputedType(
+                    right_type,
+                    get_k(), #k
+                    '**'
+                )
+            else: return right_type
         elif not right_type:
-            return left_type
+            if op_name == '__pow__': #Sec^k
+                return ComputedType(
+                    left_type,
+                    get_k(), #k
+                    '**'
+                )
+            elif op_name == '__rpow__': #k^Sec
+                assert False
+            else: return left_type
         else: # do the op
             if op_name in operators.op_methods_to_symbols:
                 # Op is not reverse
