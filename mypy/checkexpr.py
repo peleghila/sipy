@@ -3915,6 +3915,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         self.make_computed_type(op_name, base_unit, other_unit, context),
                         member.ret_type
                     ),
+                    bound_args=[a if (isinstance(a, AnyType) or not base_unit) else CompoundType(base_unit,a) for a in member.bound_args],
                     arg_types=[a if (isinstance(a, AnyType) or not other_unit) else CompoundType(other_unit, a) for a in member.arg_types]
                 )
             else:
@@ -3924,7 +3925,10 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
                         base_unit,
                         member.ret_type,
-                    ))
+                    ),
+                    bound_args=[a if (isinstance(a, AnyType) or not base_unit) else CompoundType(base_unit, a) for a in
+                                member.bound_args],
+                )
         else:
             # Everything is based on base_type or error
             if not base_unit:
@@ -3936,6 +3940,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         base_unit,
                         member.ret_type
                     ),
+                    bound_args=[a if (isinstance(a, AnyType) or not base_unit) else CompoundType(base_unit, a) for a in
+                                member.bound_args],
                     arg_types=[a if isinstance(a, AnyType) else CompoundType(base_unit, a) for a in member.arg_types]
                 )
 
