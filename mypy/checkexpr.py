@@ -3994,7 +3994,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     if t.args:
                         new_t,units = deunit_instance(t)
                         assert len(units) <= 1
-                        return new_t,units[0]
+                        return new_t,(units[0] if units else None)
                     return t,None
                 else:
                     return t,None
