@@ -3908,7 +3908,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         if op_name in {'__mul__', '__rmul__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__', '__pow__',
                        '__rpow__'}:
             # differentiate *, **, / from other ops
-            if other_unit or op_name in {'__pow__','__rpow__'}:
+            if other_unit or op_name in {'__pow__','__rpow__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__'}:
                 return member.copy_modified(
                     #if you've reached Any, just stay at Any no units
                     ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
@@ -6391,6 +6391,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     get_k(), #k
                     '**'
                 )
+            elif op_name in {'__truediv__', '__floordiv__'}:
+                return ComputedType(
+                    1,
+                    right_type,
+                    '/'
+                )
             else: return right_type
         elif not right_type:
             if op_name == '__pow__': #Sec^k
@@ -6401,6 +6407,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 )
             elif op_name == '__rpow__': #k^Sec
                 assert False
+            elif op_name in {'__rtruediv__', '__rfloordiv__'}:
+                return ComputedType(
+                    1,
+                    left_type,
+                    '/'
+                )
             else: return left_type
         else: # do the op
             if op_name in operators.op_methods_to_symbols:
