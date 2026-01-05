@@ -1115,8 +1115,13 @@ class SubtypeVisitor(TypeVisitor[bool]):
         if isinstance(right, Instance) and right.type._fullname == "builtins.object":
             return True
         if isinstance(right, CompoundType):
-            return self._is_subtype(left.base_type,right.base_type) and self._is_subtype(left.numeric_type,right.numeric_type)
+            base_eq = self._is_subtype(left.base_type,right.base_type)
+            return base_eq and self._is_subtype(left.numeric_type,right.numeric_type)
+        from sipy import EgraphTypeCompare
+        if EgraphTypeCompare.egraph_reduces_to_1(left.base_type):
+            return self._is_subtype(left.numeric_type,right)
         return False
+
 
     def visit_computed_type(self, t: ComputedType) -> bool:
         def is_same_base_type(lhs: Type | int | float, rhs: Type | int | float) -> bool:
@@ -1126,7 +1131,13 @@ class SubtypeVisitor(TypeVisitor[bool]):
                 return lhs == rhs # TODO: do we want 2 == 2.0?
 
         right = self.right
-        return is_same_base_type(t,right)
+        if is_same_base_type(t,right):
+            return True
+        else:
+            # egraphs, baby
+            from sipy import EgraphTypeCompare
+            return EgraphTypeCompare.egraph_is_same(t,right)
+
 
 
 T = TypeVar("T", bound=Type)
