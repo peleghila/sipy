@@ -281,3 +281,6 @@ class LastKnownValueEraser(TypeTranslator):
                     merged.append(orig_item)
             return UnionType.make_union(merged)
         return new
+
+    def visit_compound_type(self, t: CompoundType):
+        return t

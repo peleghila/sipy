@@ -1043,6 +1043,16 @@ class ComputedType(ProperType):
     def accept(self, visitor: TypeVisitor[T]) -> T:
         return visitor.visit_computed_type(self)
 
+    def serialize(self) -> JsonDict | str:
+        assert self.left is not None and self.right is not None
+        data: JsonDict = {
+            ".class": "ComputedType",
+            "op": self.op,
+            "left": self.left.serialize(),
+            "right": self.right.serialize(),
+        }
+        return data
+
 
 class CompoundType(ProperType):
     """Represents an SI type sliced with a numeric type"""
@@ -1070,6 +1080,15 @@ class CompoundType(ProperType):
 
     def accept(self, visitor: TypeVisitor[T]) -> T:
         return visitor.visit_compound_type(self)
+
+    def serialize(self) -> JsonDict | str:
+        assert self.base_type is not None and self.numeric_type is not None
+        data: JsonDict = {
+            ".class": "CompoundType",
+            "base_type": self.base_type.serialize(),
+            "numeric_type": self.numeric_type.serialize(),
+        }
+        return data
 
 class CallableArgument(ProperType):
     """Represents a Arg(type, 'name') inside a Callable's type list.
