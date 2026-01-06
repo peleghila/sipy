@@ -57,14 +57,20 @@ class EgraphTypeCompare:
             r = ExprNode(t.right,())
 
         return ExprNode(t.op,(l,r))
+
+    egraph = EGraph()
+    @staticmethod
+    def rule_apply():
+        Rule.apply_rules(EgraphTypeCompare.egraph_rules, EgraphTypeCompare.egraph)
+
     @staticmethod
     def egraph_reduces_to_1(t: ComputedType) -> bool:
-        egraph = EGraph(ExprTree(EgraphTypeCompare._to_node(t)))
-        one = egraph.add(ExprTree(ExprNode(1,())))
-        is_eq = False
-        while not is_eq and not egraph.is_saturated():
-            Rule.apply_rules(EgraphTypeCompare.egraph_rules, egraph)
-            is_eq = egraph.root.find() == egraph.find(one)
+        teclass = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t)))
+        one = EgraphTypeCompare.egraph.add(ExprTree(ExprNode(1,())))
+        is_eq = EgraphTypeCompare.egraph.find(teclass) == EgraphTypeCompare.egraph.find(one)
+        while not is_eq and not EgraphTypeCompare.egraph.is_saturated():
+            EgraphTypeCompare.rule_apply()
+            is_eq = EgraphTypeCompare.egraph.find(teclass) == EgraphTypeCompare.egraph.find(one)
         return is_eq
 
     egraph_rules = [
@@ -74,15 +80,16 @@ class EgraphTypeCompare:
         ExprTree.make_rule(lambda x: (x * 1, x)),
         ExprTree.make_rule(lambda x: (x / 1, x)),
         ExprTree.make_rule(lambda x: (x ** -1, 1/x)),
-        ExprTree.make_rule(lambda x: (x * x, x ** 2))
+        ExprTree.make_rule(lambda x: (x * x, x ** 2)),
+        ExprTree.make_rule(lambda x: (x ** 2, x * x))
     ]
 
     @staticmethod
     def egraph_is_same(t1: ComputedType, t2: ProperType) -> bool:
-        egraph = EGraph(ExprTree(EgraphTypeCompare._to_node(t1)))
-        rhs_id = egraph.add(ExprTree(EgraphTypeCompare._to_node(t2)))
-        is_eq = False
-        while not is_eq and not egraph.is_saturated():
-            Rule.apply_rules(EgraphTypeCompare.egraph_rules, egraph)
-            is_eq = egraph.root.find() == egraph.find(rhs_id)
+        lhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t1)))
+        rhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t2)))
+        is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
+        while not is_eq and not EgraphTypeCompare.egraph.is_saturated():
+            EgraphTypeCompare.rule_apply()
+            is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
         return is_eq
