@@ -625,6 +625,10 @@ class SubtypeVisitor(TypeVisitor[bool]):
                         return is_named_instance(item, "builtins.object")
         if isinstance(right, LiteralType) and left.last_known_value is not None:
             return self._is_subtype(left.last_known_value, right)
+        if isinstance(right, ComputedType):
+            assert(len(left.args) == 0)
+            # no subtyping only equality, just flip 'em to get to the computedtype code
+            return self._is_subtype(right,left)
         if isinstance(right, FunctionLike):
             # Special case: Instance can be a subtype of Callable / Overloaded.
             call = find_member("__call__", left, left, is_operator=True)
@@ -1115,8 +1119,7 @@ class SubtypeVisitor(TypeVisitor[bool]):
         if isinstance(right, Instance) and right.type._fullname == "builtins.object":
             return True
         if isinstance(right, CompoundType):
-            base_eq = self._is_subtype(left.base_type,right.base_type)
-            return base_eq and self._is_subtype(left.numeric_type,right.numeric_type)
+            return self._is_subtype(left.base_type,right.base_type) and self._is_subtype(left.numeric_type,right.numeric_type)
         from sipy import EgraphTypeCompare
         if EgraphTypeCompare.egraph_reduces_to_1(left.base_type):
             return self._is_subtype(left.numeric_type,right)
