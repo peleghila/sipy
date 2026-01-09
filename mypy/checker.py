@@ -426,7 +426,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
 
         # Child checker objects for specific AST node types
         self.expr_checker = mypy.checkexpr.ExpressionChecker(
-            self, self.msg, self.plugin, per_line_checking_time_ns
+            self, self.msg, self.plugin, per_line_checking_time_ns,self.modules
         )
         self.pattern_checker = PatternChecker(self, self.msg, self.plugin, options)
 

@@ -1,4 +1,4 @@
-from mypy.nodes import MypyFile
+from mypy.nodes import MypyFile, TypeInfo
 from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType, UnboundType, TypeVarType, \
     TypeAliasType, UninhabitedType, UnionType
 
@@ -19,9 +19,11 @@ def get_base_type(modules: dict[str,MypyFile]):
     return module.names[base_type_classname].node
 
 
+def is_info_sipy_base(typenode: TypeInfo) -> bool:
+    return typenode.has_base(base_type_name)
 def is_sipy_base(candidate: ProperType) -> bool:
     if isinstance(candidate, Instance):
-        return candidate.type.has_base(base_type_name)
+        return is_info_sipy_base(candidate.type)
     elif type(candidate) in {AnyType, UnboundType, TypeVarType, UninhabitedType}: #isinstance(candidate, AnyType) or isinstance(candidate, UnboundType):
         return False
     elif isinstance(candidate, ComputedType):

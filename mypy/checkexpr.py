@@ -107,7 +107,7 @@ from mypy.plugin import (
     Plugin,
 )
 from mypy.semanal_enum import ENUM_BASES
-from mypy.sipy import is_sipy_base
+from mypy.sipy import is_sipy_base, is_info_sipy_base
 from mypy.state import state
 from mypy.subtypes import (
     find_member,
@@ -305,6 +305,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
     msg: MessageBuilder
     # Type context for type inference
     type_context: list[Type | None]
+    modules: dict[str, MypyFile]
 
     # cache resolved types in some cases
     resolved_type: dict[Expression, ProperType]
@@ -312,12 +313,14 @@ class ExpressionChecker(ExpressionVisitor[Type]):
     strfrm_checker: StringFormatterChecker
     plugin: Plugin
 
+
     def __init__(
         self,
         chk: mypy.checker.TypeChecker,
         msg: MessageBuilder,
         plugin: Plugin,
         per_line_checking_time_ns: dict[int, int],
+        modules: dict[str, MypyFile],
     ) -> None:
         """Construct an expression type checker."""
         self.chk = chk
@@ -345,6 +348,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         # related to type context.
         self.is_callee = False
         type_state.infer_polymorphic = not self.chk.options.old_type_inference
+        self.modules = modules
 
     def reset(self) -> None:
         self.resolved_type = {}
@@ -570,9 +574,69 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 ret_type=self.object_type(),
                 fallback=self.named_type("builtins.function"),
             )
-        callee_type = get_proper_type(
-            self.accept(e.callee, type_context, always_allow_any=True, is_callee=True)
-        )
+
+        def computed_type_if_sipy(o: OpExpr) -> ComputedType | None:
+            if o.op in {'*', '**', '/'}:
+                if isinstance(o.left, NameExpr):
+                    if not is_info_sipy_base(o.left.node):
+                        return None
+                    left = Instance(o.left.node,())
+                elif isinstance(o.left, OpExpr):
+                    left = computed_type_if_sipy(o.left)
+                    if not left:
+                        return None
+                elif isinstance(o.left, IntExpr):
+                    if o.left.value != 1 or o.op != '/':
+                        return None
+                    left = o.left.value
+                else:
+                    return None
+
+                if isinstance(o.right,NameExpr):
+                    if not is_info_sipy_base(o.right.node):
+                        return None
+                    right = Instance(o.right.node,())
+                elif isinstance(o.right, OpExpr):
+                    right = computed_type_if_sipy(o.right)
+                    if not right:
+                        return None
+                elif isinstance(o.right, IntExpr) or isinstance(o.right, FloatExpr):
+                    if o.op != '**':
+                        return None
+                    right = o.right.value
+                else:
+                    return None
+                return ComputedType(left,right,o.op,o.line,o.column)
+            else:
+                return None
+        if isinstance(e.callee, OpExpr):
+            # treat it like an annotation type
+            op_type = computed_type_if_sipy(e.callee)
+            if not op_type:
+                # fallback to orig behavior
+                callee_type = get_proper_type(
+                    self.accept(e.callee, type_context, always_allow_any=True, is_callee=True)
+                )
+            else:
+                # get sipy base
+                from sipy import get_base_type
+                sipy_base = get_base_type(self.modules)
+                numeric_base = sipy_base.defn.type_vars[0]
+                computed_op = CompoundType(op_type,numeric_base)
+                callee_type = CallableType(
+                    [numeric_base],
+                    [ArgKind.ARG_POS],
+                    [numeric_base.name],
+                    computed_op,
+                    sipy_base.declared_metaclass,
+                    name = str(op_type),
+                    bound_args=[computed_op],
+                    variables=[numeric_base]
+                )
+        else:
+            callee_type = get_proper_type(
+                self.accept(e.callee, type_context, always_allow_any=True, is_callee=True)
+            )
 
         # Figure out the full name of the callee for plugin lookup.
         object_type = None

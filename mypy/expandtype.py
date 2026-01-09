@@ -38,7 +38,7 @@ from mypy.types import (
     UnpackType,
     flatten_nested_unions,
     get_proper_type,
-    split_with_prefix_and_suffix,
+    split_with_prefix_and_suffix, CompoundType, ComputedType,
 )
 from mypy.typevartuples import split_with_instance
 
@@ -508,6 +508,16 @@ class ExpandTypeVisitor(TrivialSyntheticTypeTranslator):
         args = self.expand_types_with_unpack(t.args)
         # TODO: normalize if target is Tuple, and args are [*tuple[X, ...]]?
         return t.copy_modified(args=args)
+
+    def visit_compound_type(self, t: CompoundType):
+        numeric = t.numeric_type.accept(self)
+        return CompoundType(
+            t.base_type,
+            numeric,
+            t.line,
+            t.column
+        )
+
 
     def expand_types(self, types: Iterable[Type]) -> list[Type]:
         a: list[Type] = []

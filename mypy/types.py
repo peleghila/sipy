@@ -1048,8 +1048,8 @@ class ComputedType(ProperType):
         data: JsonDict = {
             ".class": "ComputedType",
             "op": self.op,
-            "left": self.left.serialize(),
-            "right": self.right.serialize(),
+            "left": self.left.serialize() if isinstance(self.left, ProperType) else str(self.left),
+            "right": self.right.serialize() if isinstance(self.right, ProperType) else str(self.right),
         }
         return data
 
@@ -1057,10 +1057,11 @@ class ComputedType(ProperType):
 class CompoundType(ProperType):
     """Represents an SI type sliced with a numeric type"""
 
-    __slots__ = ("base_type","numeric_type")
+    __slots__ = ("base_type","numeric_type","type")
 
     base_type: ProperType
     numeric_type: ProperType
+    type: mypy.nodes.TypeInfo
 
     def __init__(
         self,
@@ -1077,6 +1078,7 @@ class CompoundType(ProperType):
         if isinstance(self.base_type, Instance):
             assert len(self.base_type.args) <= 1, str(self.base_type)
             self.base_type.args = ()
+        self.type = mypy.nodes.TypeInfo(None,mypy.nodes.ClassDef('',None),None)
 
     def accept(self, visitor: TypeVisitor[T]) -> T:
         return visitor.visit_compound_type(self)
@@ -2084,7 +2086,7 @@ class CallableType(FunctionLike):
             ret = ret.partial_fallback
         if isinstance(ret, TypedDictType):
             ret = ret.fallback
-        assert isinstance(ret, Instance)
+        assert isinstance(ret, Instance) or isinstance(ret,CompoundType)
         return ret.type
 
     def accept(self, visitor: TypeVisitor[T]) -> T:

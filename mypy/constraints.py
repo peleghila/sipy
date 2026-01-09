@@ -55,7 +55,7 @@ from mypy.types import (
     has_recursive_types,
     has_type_vars,
     is_named_instance,
-    split_with_prefix_and_suffix,
+    split_with_prefix_and_suffix, CompoundType,
 )
 from mypy.types_utils import is_union_with_any
 from mypy.typestate import type_state
@@ -1339,6 +1339,9 @@ class ConstraintBuilderVisitor(TypeVisitor[List[Constraint]]):
             return infer_constraints(template.item, self.actual, self.direction)
         else:
             return []
+
+    def visit_compound_type(self, t: CompoundType):
+        return []
 
 
 def neg_op(op: int) -> int:
