@@ -2456,7 +2456,7 @@ class MessageBuilder:
         )
 
     def not_sipy_type_ctor(self, left: Type, right: Type, op: str, context: Context) -> Type:
-        name = f"{format_type(left,self.options)}{op}{format_type(right,self.options)}" or "(unknown)"
+        name = f'"{format_type_bare(left,self.options)}{op}{format_type_bare(right,self.options)}"'
         self.fail(
             f"Operation {name} is a bad unit type constructor",
             context,
