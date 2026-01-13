@@ -48,7 +48,7 @@ from mypy.nodes import (
     SymbolTable,
     TypeInfo,
     Var,
-    reverse_builtin_aliases,
+    reverse_builtin_aliases, OpExpr,
 )
 from mypy.operators import op_methods, op_methods_to_symbols
 from mypy.options import Options
@@ -2454,6 +2454,15 @@ class MessageBuilder:
             context,
             code=codes.VALID_TYPE,
         )
+
+    def not_sipy_type_ctor(self, left: Type, right: Type, op: str, context: Context) -> Type:
+        name = f"{format_type(left,self.options)}{op}{format_type(right,self.options)}" or "(unknown)"
+        self.fail(
+            f"Operation {name} is a bad unit type constructor",
+            context,
+            code=codes.BAD_SIPY_CTOR,
+        )
+        return AnyType(TypeOfAny.from_error)
 
 
 def quote_type_string(type_string: str) -> str:

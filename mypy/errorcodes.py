@@ -304,6 +304,12 @@ NARROWED_TYPE_NOT_SUBTYPE: Final[ErrorCode] = ErrorCode(
     "General",
 )
 
+BAD_SIPY_CTOR: Final[ErrorCode] = ErrorCode(
+    "op-bad-unit-ctor",
+    "Operation other than *, /, ** used between unit types or invalid operation with non-unit type",
+    "sipy"
+)
+
 DEPRECATED: Final = ErrorCode(
     "deprecated",
     "Warn when importing or using deprecated (overloaded) functions, methods or classes",
