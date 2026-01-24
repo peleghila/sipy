@@ -228,7 +228,7 @@ from mypy.semanal_shared import (
     set_callable_name as set_callable_name,
 )
 from mypy.semanal_typeddict import TypedDictAnalyzer
-from mypy.sipy import is_sipy_base
+from mypy.sipy import is_sipy_base, deunit_instance
 from mypy.tvar_scope import TypeVarLikeScope
 from mypy.typeanal import (
     SELF_TYPE_NAMES,
@@ -3789,6 +3789,17 @@ class SemanticAnalyzer(
                         analyzed.line,
                         analyzed.column
                     )
+            if hasattr(analyzed, 'args') and analyzed.args:
+                clean_t, units = deunit_instance(analyzed)
+                if len(units) == 1:
+                    # Extract and turn into a compound
+                    analyzed = CompoundType(
+                        units[0],
+                        clean_t,
+                        analyzed.line,
+                        analyzed.column
+                    )
+
             s.type = analyzed
             if (
                 self.type

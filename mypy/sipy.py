@@ -1,6 +1,8 @@
+from typing import List
+
 from mypy.nodes import MypyFile, TypeInfo
 from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType, UnboundType, TypeVarType, \
-    TypeAliasType, UninhabitedType, UnionType
+    TypeAliasType, UninhabitedType, UnionType, Type, NoneType, CallableType, TupleType, TypeType, LiteralType
 
 from quiche import EGraph
 from quiche.lang.expr_lang import ExprNode, ExprTree
@@ -24,7 +26,7 @@ def is_info_sipy_base(typenode: TypeInfo) -> bool:
 def is_sipy_base(candidate: ProperType) -> bool:
     if isinstance(candidate, Instance):
         return is_info_sipy_base(candidate.type)
-    elif type(candidate) in {AnyType, UnboundType, TypeVarType, UninhabitedType}: #isinstance(candidate, AnyType) or isinstance(candidate, UnboundType):
+    elif type(candidate) in {AnyType,NoneType, UnboundType, LiteralType, TypeVarType, CallableType, TypeType, UninhabitedType}: #isinstance(candidate, AnyType) or isinstance(candidate, UnboundType):
         return False
     elif isinstance(candidate, ComputedType):
         return ((is_sipy_base(candidate.left) if isinstance(candidate.left, ProperType) else True) and
@@ -33,7 +35,7 @@ def is_sipy_base(candidate: ProperType) -> bool:
         return is_sipy_base(candidate.base_type)
     elif isinstance(candidate, TypeAliasType):
         return is_sipy_base(candidate.alias.target)
-    elif isinstance(candidate, UnionType):
+    elif isinstance(candidate, UnionType) or isinstance(candidate, TupleType):
         return any(is_sipy_base(t) for t in candidate.items)
     assert False, str(candidate)
 
@@ -95,3 +97,30 @@ class EgraphTypeCompare:
             EgraphTypeCompare.rule_apply()
             is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
         return is_eq
+
+
+def deunit_instance(t: Type) -> (Type, List[Type]):
+    if isinstance(t, Instance) or isinstance(t, TypeAliasType):
+        if not t.args:
+            return t, []
+        else:
+            new_args = []
+            collected_units = []
+            for a in t.args:
+                if is_sipy_base(a):
+                    # separate out the unit
+                    if isinstance(a, CompoundType):
+                        new_args.append(a.numeric_type)
+                        collected_units.append(a.base_type)
+                    elif isinstance(a, Instance):
+                        assert len(a.args) == 1
+                        new_args.append(a.args[0])
+                        collected_units.append(a.copy_modified(args=()))
+                else:
+                    new_a, a_units = deunit_instance(a)
+                    new_args.append(new_a)
+                    collected_units.extend(a_units)
+            new_t = t.copy_modified(args=tuple(new_args))
+            return new_t, collected_units
+    else:
+        return t, []

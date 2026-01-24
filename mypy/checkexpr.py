@@ -107,7 +107,7 @@ from mypy.plugin import (
     Plugin,
 )
 from mypy.semanal_enum import ENUM_BASES
-from mypy.sipy import is_sipy_base, is_info_sipy_base
+from mypy.sipy import is_sipy_base, is_info_sipy_base, deunit_instance
 from mypy.state import state
 from mypy.subtypes import (
     find_member,
@@ -4046,32 +4046,6 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
             # if either side is a si, rip it out and leave the numeric
             # and recompose later
-
-            def deunit_instance(t:Type) -> (Type, List[Type]):
-                if isinstance(t, Instance):
-                    if not t.args:
-                        return t,[]
-                    else:
-                        new_args = []
-                        collected_units = []
-                        for a in t.args:
-                            if is_sipy_base(a):
-                                # separate out the unit
-                                if isinstance(a,CompoundType):
-                                    new_args.append(a.numeric_type)
-                                    collected_units.append(a.base_type)
-                                elif isinstance(a,Instance):
-                                    assert len(a.args) == 1
-                                    new_args.append(a.args[0])
-                                    collected_units.append(a.copy_modified(args=()))
-                            else:
-                                new_a,a_units = deunit_instance(a)
-                                new_args.append(new_a)
-                                collected_units.extend(a_units)
-                        new_t = t.copy_modified(args=tuple(new_args))
-                        return new_t, collected_units
-                else:
-                    return t,[]
             def split_unit_type(t: Type) -> (Type,Type|None):
                 if isinstance(t, CompoundType):
                     return t.numeric_type, t.base_type
