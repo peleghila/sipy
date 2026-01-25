@@ -1,8 +1,11 @@
 from typing import List
 
 from mypy.nodes import MypyFile, TypeInfo
+from mypy.type_visitor import T
 from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType, UnboundType, TypeVarType, \
-    TypeAliasType, UninhabitedType, UnionType, Type, NoneType, CallableType, TupleType, TypeType, LiteralType
+    TypeAliasType, UninhabitedType, UnionType, Type, NoneType, CallableType, TupleType, TypeType, LiteralType, \
+    UnpackType, PartialType, TypedDictType, Overloaded, TypeVarTupleType, Parameters, ParamSpecType, DeletedType, \
+    ErasedType, PlaceholderType, RawExpressionType, EllipsisType, CallableArgument, TypeList
 
 from quiche import EGraph
 from quiche.lang.expr_lang import ExprNode, ExprTree
@@ -24,20 +27,83 @@ def get_base_type(modules: dict[str,MypyFile]):
 def is_info_sipy_base(typenode: TypeInfo) -> bool:
     return typenode.has_base(base_type_name)
 def is_sipy_base(candidate: ProperType) -> bool:
-    if isinstance(candidate, Instance):
-        return is_info_sipy_base(candidate.type)
-    elif type(candidate) in {AnyType,NoneType, UnboundType, LiteralType, TypeVarType, CallableType, TypeType, UninhabitedType}: #isinstance(candidate, AnyType) or isinstance(candidate, UnboundType):
-        return False
-    elif isinstance(candidate, ComputedType):
-        return ((is_sipy_base(candidate.left) if isinstance(candidate.left, ProperType) else True) and
-                (is_sipy_base(candidate.right) if isinstance(candidate.right, ProperType) else True))
-    elif isinstance(candidate, CompoundType):
-        return is_sipy_base(candidate.base_type)
-    elif isinstance(candidate, TypeAliasType):
-        return is_sipy_base(candidate.alias.target)
-    elif isinstance(candidate, UnionType) or isinstance(candidate, TupleType):
-        return any(is_sipy_base(t) for t in candidate.items)
-    assert False, str(candidate)
+    from mypy.type_visitor import SyntheticTypeVisitor
+    class IsBase(SyntheticTypeVisitor[bool]):
+        def visit_unbound_type(self, t: UnboundType) -> bool:
+            return False
+        def visit_any(self, t: AnyType) -> bool:
+            return False
+        def visit_none_type(self, t: NoneType) -> bool:
+            return False
+        def visit_literal_type(self, t: LiteralType) -> bool:
+            return False
+        def visit_type_var(self, t: TypeVarType) -> bool:
+            return False
+        def visit_callable_type(self, t: CallableType) -> bool:
+            return False
+        def visit_overloaded(self, t: Overloaded) -> bool:
+            return False
+        def visit_param_spec(self, t: ParamSpecType) -> T:
+            return False
+        def visit_type_type(self, t: TypeType) -> bool:
+            return False
+        def visit_ellipsis_type(self, t: EllipsisType) -> bool:
+            return False
+        def visit_raw_expression_type(self, t: RawExpressionType) -> bool:
+            return False
+        def visit_uninhabited_type(self, t: UninhabitedType) -> bool:
+            return False
+        def visit_deleted_type(self, t: DeletedType) -> bool:
+            return False
+        def visit_type_var_tuple(self, t: TypeVarTupleType) -> T:
+            return False
+
+        def visit_type_list(self, t: TypeList) -> bool:
+            pass
+
+        def visit_callable_argument(self, t: CallableArgument) -> bool:
+            pass
+
+        def visit_placeholder_type(self, t: PlaceholderType) -> T:
+            pass
+
+        def visit_erased_type(self, t: ErasedType) -> T:
+            pass
+
+
+        def visit_partial_type(self, t: PartialType) -> T:
+            pass
+
+
+        def visit_typeddict_type(self, t: TypedDictType) -> T:
+            return any(item.accept(self) for item in t.items.values())
+        def visit_union_type(self, t: UnionType) -> bool:
+            return any(item.accept(self) for item in t.items)
+        def visit_tuple_type(self, t: TupleType) -> bool:
+            return any(item.accept(self) for item in t.items)
+        def visit_parameters(self, t: Parameters) -> T:
+            return any(item.accept(self) for item in t.arg_types)
+
+
+        def visit_type_alias_type(self, t: TypeAliasType) -> bool:
+            return t.alias.target.accept(self)
+        def visit_unpack_type(self, t: UnpackType) -> T:
+            return t.type.accept(self)
+
+        def visit_compound_type(self, t: CompoundType) -> bool:
+            t.base_type.accept(self)
+
+        def visit_computed_type(self, t: ComputedType) -> bool:
+            lhs = not isinstance(t.left, ProperType) or t.left.accept(self)
+            rhs = not isinstance(t.right, ProperType) or t.right.accept(self)
+            return lhs and rhs
+
+        def visit_instance(self, t: Instance) -> bool:
+            return is_info_sipy_base(t.type)
+
+    ret = candidate.accept(IsBase())
+    assert ret is not None, candidate
+    return ret
 
 
 class EgraphTypeCompare:

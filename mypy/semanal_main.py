@@ -402,7 +402,7 @@ def check_type_arguments_in_targets(
         errors,
         state.options,
         is_typeshed_file(state.options.abs_custom_typeshed_dir, state.path or ""),
-        state
+        state.manager
     )
     with state.wrap_context():
         with mypy.state.state.strict_optional_set(state.options.strict_optional):
