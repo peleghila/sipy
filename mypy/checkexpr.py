@@ -601,11 +601,11 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     right = Instance(o.right.node,())
             elif isinstance(o.right, OpExpr):
                 right = computed_type_if_sipy(o.right)
-            elif isinstance(o.right, IntExpr) or isinstance(o.right, FloatExpr):
+            elif ExpressionChecker.is_numeric_literal_expr(o.right): # func in case of -2 (unaryop)
                 if o.op != '**':
                     right = None
                 else:
-                    right = o.right.value
+                    right = ExpressionChecker.get_numeric_literal_value(o.right)
             else:
                 right = None
             if not left and not right:
@@ -6425,15 +6425,30 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             and not self.chk.allow_abstract_call
         )
 
+    @staticmethod
+    def is_numeric_literal_expr(e: Expression):
+        if isinstance(e, IntExpr) or isinstance(e, FloatExpr):
+            return True
+        elif isinstance(e, UnaryExpr) and e.op == '-':
+            if isinstance(e.expr, IntExpr) or isinstance(e.expr, FloatExpr):
+                return True
+        return False
+
+    @staticmethod
+    def get_numeric_literal_value(e: Expression) -> int | float | None:
+        if isinstance(e, IntExpr) or isinstance(e, FloatExpr):
+            return e.value
+        elif isinstance(e, UnaryExpr) and e.op == '-':
+            if isinstance(e.expr, IntExpr) or isinstance(e.expr, FloatExpr):
+                return -e.expr.value
+        return None
+
     def make_computed_type(self, op_name: str, left_type: Type, right_type: Type, context: Context) -> Type:
         def get_k() -> int | float | None:
             assert isinstance(context, OpExpr)
             k_in = context.left if not left_type else context.right
-            if isinstance(k_in, FloatExpr):
-                return k_in.value
-            if isinstance(k_in, IntExpr):
-                return k_in.value
-            return None
+            return ExpressionChecker.get_numeric_literal_value(k_in)
+
 
         if not left_type:
             if op_name == '__pow__': # k^Sec?
