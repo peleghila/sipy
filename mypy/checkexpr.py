@@ -107,7 +107,7 @@ from mypy.plugin import (
     Plugin,
 )
 from mypy.semanal_enum import ENUM_BASES
-from mypy.sipy import is_sipy_base, is_info_sipy_base, deunit_instance
+from mypy.sipy import is_sipy_base, is_info_sipy_base, deunit_instance, is_funcdef_sipy_dtype
 from mypy.state import state
 from mypy.subtypes import (
     find_member,
@@ -1561,9 +1561,35 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         # Unions are special-cased to allow plugins to act on each item in the union.
         elif member is not None and isinstance(object_type, UnionType):
             return self.check_union_call_expr(e, object_type, member)
+        args = e.args
+        dtype_idx = -1
+        reserved_units = None
+        if callable_name and callable_name.startswith('numpy.'):
+            dtype_idx = next(filter(
+                lambda a: isinstance(a[1],CallExpr)
+                          and is_funcdef_sipy_dtype(a[1].callee.node), enumerate(e.args)), (-1,None))[0]
+            if dtype_idx > -1:
+                dtype_call = e.args[dtype_idx]
+                if len(dtype_call.args) != 1 or not isinstance(dtype_call.args[0],IndexExpr):
+                    assert False, "TODO: make error message"
+                else:
+                    reserved_units = dtype_call.args[0].base
+                    if isinstance(reserved_units,NameExpr):
+                        if not is_info_sipy_base(reserved_units.node):
+                            assert False, "TODO: make error message"
+                        else:
+                            reserved_units = Instance(reserved_units.node,())
+                    elif isinstance(reserved_units, OpExpr):
+                        reserved_units = ExpressionChecker.computed_type_if_sipy(reserved_units)
+                        if not reserved_units or isinstance(reserved_units, AnyType):
+                            assert False, "TODO: make error message"
+                    #turn reserved units into type
+                    if reserved_units:
+                        args[dtype_idx] = dtype_call.args[0].index
+
         ret_type, callee_type = self.check_call(
             callee_type,
-            e.args,
+            args,
             e.arg_kinds,
             e,
             e.arg_names,
@@ -1582,6 +1608,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 e.callee.type_guard = proper_callee.type_guard
             if proper_callee.type_is is not None:
                 e.callee.type_is = proper_callee.type_is
+        if reserved_units:
+            ret_type = CompoundType(reserved_units,ret_type,ret_type.line,ret_type.column)
         return ret_type
 
     def check_union_call_expr(self, e: CallExpr, object_type: UnionType, member: str) -> Type:

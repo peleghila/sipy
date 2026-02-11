@@ -1,6 +1,6 @@
 from typing import List
 
-from mypy.nodes import MypyFile, TypeInfo
+from mypy.nodes import MypyFile, TypeInfo, FuncDef
 from mypy.type_visitor import T
 from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType, UnboundType, TypeVarType, \
     TypeAliasType, UninhabitedType, UnionType, Type, NoneType, CallableType, TupleType, TypeType, LiteralType, \
@@ -12,6 +12,7 @@ from quiche.lang.expr_lang import ExprNode, ExprTree
 from quiche.rewrite import Rule
 
 base_type_name = "src.SUnit1.SIUnit.SIUnit"
+dtype_name = "src.SUnit1.SIUnit.dtype"
 base_type_module, base_type_classname = base_type_name.rsplit('.', maxsplit=1)
 base_type_filename = "D:\\code\\units1\\src\\SUnit1\\SIUnit.py"
 
@@ -26,6 +27,11 @@ def get_base_type(modules: dict[str,MypyFile]):
 
 def is_info_sipy_base(typenode: TypeInfo) -> bool:
     return typenode.has_base(base_type_name)
+
+def is_funcdef_sipy_dtype(node: FuncDef) -> bool:
+    if node is None: return False
+    return node.fullname == dtype_name
+
 def is_sipy_base(candidate: ProperType) -> bool:
     from mypy.type_visitor import SyntheticTypeVisitor
     class IsBase(SyntheticTypeVisitor[bool]):

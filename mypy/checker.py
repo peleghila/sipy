@@ -4371,6 +4371,31 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 ):
                     rvalue_type = alt_rvalue_type
                     self.store_types(type_map)
+            if (
+                isinstance(get_proper_type(rvalue_type), Instance)
+                and rvalue_type.type.fullname == 'numpy.ndarray'
+                # if the function returned ndarray[_, Any]:
+                and isinstance(rvalue_type.args[1], Instance)
+                and rvalue_type.args[1].type
+                and rvalue_type.args[1].args
+                and isinstance(rvalue_type.args[1].args[0],AnyType)
+            ):
+                # Try re-inferring r.h.s. in empty context
+                with self.msg.filter_errors() as local_errors:
+                    alt_rvalue_type = self.expr_checker.accept(
+                        rvalue, None, always_allow_any=always_allow_any
+                    )
+                if (not local_errors.has_new_errors()
+                    and alt_rvalue_type != rvalue_type):
+                    rvalue_str,lvalue_str = format_type_distinctly(
+                        alt_rvalue_type, lvalue_type, options=self.options
+                    )
+                    self.fail(
+                        msg.with_additional_msg(
+                            " (" + f"{rvalue_name} has type {rvalue_str}, " +
+                             f"{lvalue_name} has type {lvalue_str}" + ")"
+                        ), context)
+                    return rvalue_type
             if isinstance(rvalue_type, DeletedType):
                 self.msg.deleted_as_rvalue(rvalue_type, context)
             if isinstance(lvalue_type, DeletedType):
