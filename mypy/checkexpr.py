@@ -497,6 +497,55 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             get_proper_type(base.node.target), TypedDictType
         )
 
+    def computed_type_if_sipy(self, o: OpExpr, type_context: Type) -> ComputedType | AnyType | None:
+
+        left = None
+        if isinstance(o.left, NameExpr):
+            if not is_info_sipy_base(o.left.node):
+                left = None
+            else:
+                left = Instance(o.left.node, ())
+        elif isinstance(o.left, OpExpr):
+            left = self.computed_type_if_sipy(o.left, type_context)
+        elif isinstance(o.left, IntExpr):
+            if o.left.value != 1 or o.op != '/':
+                left = None
+            else:
+                left = o.left.value
+        else:
+            left = None
+
+        right = None
+        if isinstance(o.right, NameExpr):
+            if not is_info_sipy_base(o.right.node):
+                right = None
+            else:
+                right = Instance(o.right.node, ())
+        elif isinstance(o.right, OpExpr):
+            right = self.computed_type_if_sipy(o.right, type_context)
+        elif ExpressionChecker.is_numeric_literal_expr(o.right):  # func in case of -2 (unaryop)
+            if o.op != '**':
+                right = None
+            else:
+                right = ExpressionChecker.get_numeric_literal_value(o.right)
+        else:
+            right = None
+        if not left and not right:
+            return None
+        if bool(left) ^ bool(right):
+            return self.msg.not_sipy_type_ctor(
+                left or get_proper_type(
+                    self.accept(o.left, type_context, always_allow_any=True, is_callee=True)
+                ),
+                right or get_proper_type(
+                    self.accept(o.right, type_context, always_allow_any=True, is_callee=True)
+                ), o.op, e)
+        if left and right and o.op not in {'*', '**', '/'}:
+            return self.msg.not_sipy_type_ctor(left, right, o.op, e)
+        if isinstance(left, AnyType): return left
+        if isinstance(right, AnyType): return right
+        return ComputedType(left, right, o.op, o.line, o.column)
+
     def visit_call_expr_inner(self, e: CallExpr, allow_none_return: bool = False) -> Type:
         if (
             self.refers_to_typeddict(e.callee)
@@ -575,58 +624,9 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 fallback=self.named_type("builtins.function"),
             )
 
-        def computed_type_if_sipy(o: OpExpr) -> ComputedType | AnyType | None:
-
-            left = None
-            if isinstance(o.left, NameExpr):
-                if not is_info_sipy_base(o.left.node):
-                    left = None
-                else:
-                    left = Instance(o.left.node,())
-            elif isinstance(o.left, OpExpr):
-                left = computed_type_if_sipy(o.left)
-            elif isinstance(o.left, IntExpr):
-                if o.left.value != 1 or o.op != '/':
-                    left = None
-                else:
-                    left = o.left.value
-            else:
-                left = None
-
-            right = None
-            if isinstance(o.right,NameExpr):
-                if not is_info_sipy_base(o.right.node):
-                    right = None
-                else:
-                    right = Instance(o.right.node,())
-            elif isinstance(o.right, OpExpr):
-                right = computed_type_if_sipy(o.right)
-            elif ExpressionChecker.is_numeric_literal_expr(o.right): # func in case of -2 (unaryop)
-                if o.op != '**':
-                    right = None
-                else:
-                    right = ExpressionChecker.get_numeric_literal_value(o.right)
-            else:
-                right = None
-            if not left and not right:
-                return None
-            if bool(left) ^ bool(right):
-                return self.msg.not_sipy_type_ctor(
-                    left or get_proper_type(
-                        self.accept(o.left, type_context, always_allow_any=True, is_callee=True)
-                    ),
-                    right or get_proper_type(
-                        self.accept(o.right, type_context, always_allow_any=True, is_callee=True)
-                    ), o.op, e)
-            if left and right and o.op not in {'*', '**', '/'}:
-                return self.msg.not_sipy_type_ctor(left, right, o.op, e)
-            if isinstance(left, AnyType): return left
-            if isinstance(right, AnyType): return right
-            return ComputedType(left, right, o.op, o.line, o.column)
-
         if isinstance(e.callee, OpExpr):
             # treat it like an annotation type
-            op_type = computed_type_if_sipy(e.callee)
+            op_type = self.computed_type_if_sipy(e.callee,type_context)
             if not op_type or isinstance(op_type, AnyType):
                 # fallback to orig behavior
                 callee_type = get_proper_type(
@@ -1580,7 +1580,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         else:
                             reserved_units = Instance(reserved_units.node,())
                     elif isinstance(reserved_units, OpExpr):
-                        reserved_units = ExpressionChecker.computed_type_if_sipy(reserved_units)
+                        reserved_units = self.computed_type_if_sipy(reserved_units,None)
                         if not reserved_units or isinstance(reserved_units, AnyType):
                             assert False, "TODO: make error message"
                     #turn reserved units into type
