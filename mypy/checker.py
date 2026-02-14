@@ -4371,14 +4371,15 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 ):
                     rvalue_type = alt_rvalue_type
                     self.store_types(type_map)
+            proper_rvalue_type = get_proper_type(rvalue_type)
             if (
-                isinstance(get_proper_type(rvalue_type), Instance)
-                and rvalue_type.type.fullname == 'numpy.ndarray'
+                isinstance(proper_rvalue_type, Instance)
+                and proper_rvalue_type.type.fullname == 'numpy.ndarray'
                 # if the function returned ndarray[_, Any]:
-                and isinstance(rvalue_type.args[1], Instance)
-                and rvalue_type.args[1].type
-                and rvalue_type.args[1].args
-                and isinstance(rvalue_type.args[1].args[0],AnyType)
+                and isinstance(proper_rvalue_type.args[1], Instance)
+                and proper_rvalue_type.args[1].type
+                and proper_rvalue_type.args[1].args
+                and isinstance(proper_rvalue_type.args[1].args[0],AnyType)
             ):
                 # Try re-inferring r.h.s. in empty context
                 with self.msg.filter_errors() as local_errors:
@@ -4386,7 +4387,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                         rvalue, None, always_allow_any=always_allow_any
                     )
                 if (not local_errors.has_new_errors()
-                    and alt_rvalue_type != rvalue_type):
+                    and alt_rvalue_type != proper_rvalue_type):
                     rvalue_str,lvalue_str = format_type_distinctly(
                         alt_rvalue_type, lvalue_type, options=self.options
                     )
