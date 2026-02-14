@@ -2464,6 +2464,13 @@ class MessageBuilder:
         )
         return AnyType(TypeOfAny.from_error)
 
+    def dtype_bad_param(self, context: Context):
+        self.fail(
+            f"Argument to dtype must be a unit type",
+            context,
+            code=codes.BAD_SIPY_DTYPE
+        )
+
 
 def quote_type_string(type_string: str) -> str:
     """Quotes a type representation for use in messages."""

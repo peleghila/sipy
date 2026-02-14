@@ -1,6 +1,6 @@
 from typing import List
 
-from mypy.nodes import MypyFile, TypeInfo, FuncDef
+from mypy.nodes import MypyFile, TypeInfo, FuncDef, TypeAlias
 from mypy.type_visitor import T
 from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType, UnboundType, TypeVarType, \
     TypeAliasType, UninhabitedType, UnionType, Type, NoneType, CallableType, TupleType, TypeType, LiteralType, \

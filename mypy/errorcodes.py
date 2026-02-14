@@ -310,6 +310,12 @@ BAD_SIPY_CTOR: Final[ErrorCode] = ErrorCode(
     "sipy"
 )
 
+BAD_SIPY_DTYPE: Final[ErrorCode] = ErrorCode(
+    "dtype-bad-arg",
+    "dtype must be called with a unit type",
+    "sipy"
+)
+
 DEPRECATED: Final = ErrorCode(
     "deprecated",
     "Warn when importing or using deprecated (overloaded) functions, methods or classes",

@@ -497,7 +497,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             get_proper_type(base.node.target), TypedDictType
         )
 
-    def computed_type_if_sipy(self, o: OpExpr, type_context: Type) -> ComputedType | AnyType | None:
+    def computed_type_if_sipy(self, o: OpExpr, type_context: Type, error_ctx: Context) -> ComputedType | AnyType | None:
 
         left = None
         if isinstance(o.left, NameExpr):
@@ -506,7 +506,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             else:
                 left = Instance(o.left.node, ())
         elif isinstance(o.left, OpExpr):
-            left = self.computed_type_if_sipy(o.left, type_context)
+            left = self.computed_type_if_sipy(o.left, type_context, error_ctx)
         elif isinstance(o.left, IntExpr):
             if o.left.value != 1 or o.op != '/':
                 left = None
@@ -522,7 +522,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             else:
                 right = Instance(o.right.node, ())
         elif isinstance(o.right, OpExpr):
-            right = self.computed_type_if_sipy(o.right, type_context)
+            right = self.computed_type_if_sipy(o.right, type_context, error_ctx)
         elif ExpressionChecker.is_numeric_literal_expr(o.right):  # func in case of -2 (unaryop)
             if o.op != '**':
                 right = None
@@ -539,9 +539,9 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 ),
                 right or get_proper_type(
                     self.accept(o.right, type_context, always_allow_any=True, is_callee=True)
-                ), o.op, e)
+                ), o.op, error_ctx)
         if left and right and o.op not in {'*', '**', '/'}:
-            return self.msg.not_sipy_type_ctor(left, right, o.op, e)
+            return self.msg.not_sipy_type_ctor(left, right, o.op, error_ctx)
         if isinstance(left, AnyType): return left
         if isinstance(right, AnyType): return right
         return ComputedType(left, right, o.op, o.line, o.column)
@@ -626,7 +626,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
         if isinstance(e.callee, OpExpr):
             # treat it like an annotation type
-            op_type = self.computed_type_if_sipy(e.callee,type_context)
+            op_type = self.computed_type_if_sipy(e.callee,type_context, e)
             if not op_type or isinstance(op_type, AnyType):
                 # fallback to orig behavior
                 callee_type = get_proper_type(
@@ -1571,20 +1571,25 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             if dtype_idx > -1:
                 dtype_call = e.args[dtype_idx]
                 if len(dtype_call.args) != 1 or not isinstance(dtype_call.args[0],IndexExpr):
-                    assert False, "TODO: make error message"
+                    reserved_units = self.msg.dtype_bad_param(dtype_call)
                 else:
                     reserved_units = dtype_call.args[0].base
+                    # turn reserved units into type
                     if isinstance(reserved_units,NameExpr):
-                        if not is_info_sipy_base(reserved_units.node):
+                        if not reserved_units.node or (not isinstance(reserved_units.node,TypeInfo) and not isinstance(reserved_units.node, TypeAlias)):
                             assert False, "TODO: make error message"
+                        elif isinstance(reserved_units.node,TypeInfo) and not is_info_sipy_base(reserved_units.node):
+                            reserved_units = self.msg.dtype_bad_param(dtype_call)
+                        elif isinstance(reserved_units.node, TypeAlias) and not is_sipy_base(reserved_units.node.target):
+                            reserved_units = self.msg.dtype_bad_param(dtype_call)
                         else:
                             reserved_units = Instance(reserved_units.node,())
                     elif isinstance(reserved_units, OpExpr):
-                        reserved_units = self.computed_type_if_sipy(reserved_units,None)
+                        reserved_units = self.computed_type_if_sipy(reserved_units,None, e)
                         if not reserved_units or isinstance(reserved_units, AnyType):
-                            assert False, "TODO: make error message"
-                    #turn reserved units into type
-                    if reserved_units:
+                            reserved_units = self.msg.dtype_bad_param(dtype_call)
+                    # leave arg as just numeric type
+                    if reserved_units and not isinstance(reserved_units,AnyType):
                         args[dtype_idx] = dtype_call.args[0].index
 
         ret_type, callee_type = self.check_call(
