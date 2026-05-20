@@ -97,7 +97,7 @@ def is_sipy_base(candidate: ProperType) -> bool:
             return t.type.accept(self)
 
         def visit_compound_type(self, t: CompoundType) -> bool:
-            t.base_type.accept(self)
+            return t.base_type.accept(self)
 
         def visit_computed_type(self, t: ComputedType) -> bool:
             lhs = not isinstance(t.left, ProperType) or t.left.accept(self)
