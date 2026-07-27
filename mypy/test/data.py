@@ -653,6 +653,13 @@ _case_name_pattern = re.compile(
     r"(?P<xfail>-xfail)?"
 )
 
+def strip_shared(shared_data: str) -> str:
+    shared_lines = shared_data.split('\n')
+    data_idx = next((i for i,line in enumerate(shared_lines) if line.startswith('[')),-1)
+    if data_idx == -1:
+        return ''
+
+    return '\n'.join(shared_lines[data_idx:])
 
 def split_test_cases(
     parent: DataFileCollector, suite: DataSuite, file: str
@@ -666,7 +673,9 @@ def split_test_cases(
         data = f.read()
     cases = re.split(r"^\[case ([^]+)]+)\][ \t]*$\n", data, flags=re.DOTALL | re.MULTILINE)
     cases_iter = iter(cases)
-    line_no = next(cases_iter).count("\n") + 1
+    shared_data = next(cases_iter)
+    line_no = shared_data.count("\n") + 1
+    shared_data = strip_shared(shared_data)
     test_names = set()
     for case_id in cases_iter:
         data = next(cases_iter)
@@ -692,7 +701,7 @@ def split_test_cases(
             skip=bool(m.group("skip")),
             xfail=bool(m.group("xfail")),
             normalize_output=not m.group("skip_path_normalization"),
-            data=data,
+            data=data + ('\n' + shared_data if shared_data else ''),
             line=line_no,
         )
         line_no += data.count("\n") + 1
