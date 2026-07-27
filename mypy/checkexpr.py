@@ -634,7 +634,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 )
             else:
                 # get sipy base
-                from sipy import get_base_type
+                from mypy.sipy import get_base_type
                 sipy_base = get_base_type(self.modules)
                 numeric_base = sipy_base.defn.type_vars[0]
                 computed_op = CompoundType(op_type,numeric_base)

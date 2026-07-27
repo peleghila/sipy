@@ -1120,7 +1120,7 @@ class SubtypeVisitor(TypeVisitor[bool]):
             return True
         if isinstance(right, CompoundType):
             return self._is_subtype(left.base_type,right.base_type) and self._is_subtype(left.numeric_type,right.numeric_type)
-        from sipy import EgraphTypeCompare
+        from mypy.sipy import EgraphTypeCompare
         if EgraphTypeCompare.egraph_reduces_to_1(left.base_type):
             return self._is_subtype(left.numeric_type,right)
         return False
@@ -1138,7 +1138,7 @@ class SubtypeVisitor(TypeVisitor[bool]):
             return True
         else:
             # egraphs, baby
-            from sipy import EgraphTypeCompare
+            from mypy.sipy import EgraphTypeCompare
             return EgraphTypeCompare.egraph_is_same(t,right)
 
 
