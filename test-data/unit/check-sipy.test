@@ -71,15 +71,26 @@ class Sec(Time[NumericBase]):
         ...
 
 
-[case testGoodAnnotations]
+[case testNumpySanityCheck]
 import numpy as np
-from src.SUnit1.SIUnit import M, Sec, dtype
-g: (M/Sec**2)[float] = (M/Sec**2)(9.8)
-y: (M*M)[float] = (M**2)(2)
-t: np.NDArray[Sec[np.float32]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.int64]))
+from numpy.typing import NDArray
+x: np.bool = np.float32(2) # E: Incompatible types in assignment (expression has type "floating[_32Bit]", variable has type "numpy.bool[builtins.bool]")
+y: NDArray[np.float32] = np.array([1,2,3],dtype=np.float32)
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
+[case testGoodAnnotations]
+from src.SUnit1.SIUnit import M, Sec
+g: (M/Sec**2)[float] = (M/Sec**2)(9.8)
+y: (M*M)[float] = (M**2)(2)
+
+[case testGoodAnnotationsNumpy]
+from src.SUnit1.SIUnit import Sec, dtype
+import numpy as np
+from numpy.typing import NDArray
+t: NDArray[Sec[np.float32]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.int64]))
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
 
 [case testBadAnnotations]
 from src.SUnit1.SIUnit import M
@@ -91,11 +102,7 @@ a: M - M = 5 # E: Invalid type comment or annotation
 b: 2**M = 6 # E: Invalid type comment or annotation
 
 
-[case testNumpySanityCheck]
-import numpy as np
-x: np.bool = np.float32(2) # E: Incompatible types in assignment (expression has type "floating[Any]", variable has type "numpy.bool[builtins.bool]")
-[typing fixtures/typing-fuller.pyi]
-[builtins fixtures/builtins-fuller.pyi]
+
 
 [case testGoodAssignmentsAddSub]
 
