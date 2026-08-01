@@ -102,9 +102,23 @@ a: M - M = 5 # E: Invalid type comment or annotation
 b: 2**M = 6 # E: Invalid type comment or annotation
 
 
-
-
 [case testGoodAssignmentsAddSub]
+from src.SUnit1.SIUnit import Sec
+t1: Sec[int] = Sec(6)
+t2: Sec[float] = Sec(7.0)
+t1 = t1 + t1
+t2 = t2 - t2
+t2 = t2 + t1
+t1 = t2 - t1 # E: Incompatible types in assignment (expression has type "Sec[float]", variable has type "Sec[int]")
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+[case testGoodAssignmentsAddSubNumpy]
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import Sec, dtype
+
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
 
 [case testGoodAssignmentsMulDivPow]
 
@@ -112,4 +126,22 @@ b: 2**M = 6 # E: Invalid type comment or annotation
 
 [case testIllegalOperationBetweenUnits]
 
-[case testNumpyDtypeWrapper]
+[case testBadAssignmentNumpyDtypeWrapper]
+import numpy as np
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import Sec, dtype
+
+t: NDArray[Sec[np.float32]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.int64])) # E: Incompatible types in assignment (expression has type "Sec[ndarray[tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[tuple[Any, ...], dtype[floating[_32Bit]]]]")
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testBadAssignmentNDArrayElement]
+import numpy as np
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import M, dtype
+
+y0: M[float] = M(2.0)
+y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
+y[0] = y0
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
