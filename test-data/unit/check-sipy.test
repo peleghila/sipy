@@ -100,6 +100,8 @@ y: 2 * 2 = 3 # E: Invalid type comment or annotation
 z: M + M = 4 # E: Invalid type comment or annotation
 a: M - M = 5 # E: Invalid type comment or annotation
 b: 2**M = 6 # E: Invalid type comment or annotation
+blah: M*M = 6 # E: units must have a numeric type
+tsq1: M*M[int] = 8 # E: Invalid type comment or annotation
 
 
 [case testGoodAssignmentsAddSub]
@@ -109,7 +111,7 @@ t2: Sec[float] = Sec(7.0)
 t1 = t1 + t1
 t2 = t2 - t2
 t2 = t2 + t1
-t1 = t2 - t1 # E: Incompatible types in assignment (expression has type "Sec[float]", variable has type "Sec[int]")
+t2 = t1 + t2
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
 
@@ -121,8 +123,51 @@ from src.SUnit1.SIUnit import Sec, dtype
 [builtins fixtures/builtins-fuller.pyi]
 
 [case testGoodAssignmentsMulDivPow]
+from src.SUnit1.SIUnit import Sec
+t1: Sec[int] = Sec(6)
+t2: Sec[float] = Sec(7.0)
+tsq1: (Sec*Sec)[int] = t1 * t1
+tsq2: (Sec**2)[int] = t1 * t1
+tsq3: (Sec*Sec)[float] = t2 * t2
+tsq4: (Sec**2)[float] = t2 * t2
+tsq5: (Sec*Sec)[float] = t1 * t2
+tsq6: (Sec**2)[float] = t1 * t2
+tsq7: (Sec*Sec)[float] = t2 * t1
+tsq8: (Sec**2)[float] = t2 * t1
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
 
-[case testTypeMismatchError]
+
+[case testGoodAssignmentMathPow]
+from src.SUnit1.SIUnit import Sec
+import math
+t1: Sec[int] = Sec(6)
+t2: Sec[float] = Sec(7.0)
+tsq1: (Sec*Sec)[float] = math.pow(t1,2)
+tsq2: (Sec**2)[float] = math.pow(t1,2)
+tsq3: (Sec*Sec)[float] = math.pow(t2,2)
+tsq4: (Sec**2)[float] = math.pow(t2,2)
+tsq5: (Sec*Sec*Sec)[float] = math.pow(t1,3)
+tsq6: (Sec**3)[float] = math.pow(t1,3)
+tsq7: (Sec*Sec*Sec)[float] = math.pow(t2,3)
+tsq8: (Sec**3)[float] = math.pow(t2,3)
+
+[case testGoodAssignmentMultDivPowNumpy]
+
+[case testGoodAssignmentMathPowNumpy]
+
+[case assignmentTypeMismatch]
+from src.SUnit1.SIUnit import Sec
+t1: Sec[int] = Sec(6)
+t2: Sec[float] = Sec(7.0)
+tsq_bad1: (Sec*Sec)[int] = t2 * t2 # E: Incompatible types in assignment (expression has type "Sec*Sec[float]", variable has type "Sec*Sec[int]")
+tsq_bad2: (Sec**2)[int] = t2 * t2 # E: Incompatible types in assignment (expression has type "Sec*Sec[float]", variable has type "Sec**2[int]")
+t1 = t2 - t1 # E: Incompatible types in assignment (expression has type "Sec[float]", variable has type "Sec[int]")
+t1 = t1 - t2 # E: Incompatible types in assignment (expression has type "Sec[float]", variable has type "Sec[int]")
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+[case testOperatorTypeMismatch]
 
 [case testIllegalOperationBetweenUnits]
 
@@ -132,6 +177,17 @@ from numpy.typing import NDArray
 from src.SUnit1.SIUnit import Sec, dtype
 
 t: NDArray[Sec[np.float32]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.int64])) # E: Incompatible types in assignment (expression has type "Sec[ndarray[tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[tuple[Any, ...], dtype[floating[_32Bit]]]]")
+t2: NDArray[Sec[np.int64]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.float32])) # E: Incompatible types in assignment (expression has type "Sec[ndarray[tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[tuple[Any, ...], dtype[floating[_32Bit]]]]")
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testGoodAssignmentNDArrayElement]
+import numpy as np
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import M, dtype
+y0: M[np.float64] = M(np.float64(2.0))
+y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
+y[0] = y0
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
