@@ -172,12 +172,13 @@ t1 = t1 - t2 # E: Incompatible types in assignment (expression has type "Sec[flo
 [case testIllegalOperationBetweenUnits]
 
 [case testBadAssignmentNumpyDtypeWrapper]
+# flags: --python-version 3.10
 import numpy as np
 from numpy.typing import NDArray
 from src.SUnit1.SIUnit import Sec, dtype
 
-t: NDArray[Sec[np.float32]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.int64])) # E: Incompatible types in assignment (expression has type "Sec[ndarray[tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[tuple[Any, ...], dtype[floating[_32Bit]]]]")
-t2: NDArray[Sec[np.int64]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.float32])) # E: Incompatible types in assignment (expression has type "Sec[ndarray[tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[tuple[Any, ...], dtype[floating[_32Bit]]]]")
+t: NDArray[Sec[np.float32]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.int64])) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]")
+t2: NDArray[Sec[np.int64]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(Sec[np.float32])) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]")
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
