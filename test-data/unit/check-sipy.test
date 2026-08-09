@@ -201,3 +201,11 @@ y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
 y[0] = y0
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
+
+[case testDtypeBadArgs]
+
+[case testDtypeNotUnit]
+
+[case testDtypeCompoundUnit]
+
+[case testDtypeSimpleUnit]
