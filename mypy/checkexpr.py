@@ -1566,7 +1566,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         reserved_units = None
         if callable_name and callable_name.startswith('numpy.'):
             dtype_idx = next(filter(
-                lambda a: isinstance(a[1],CallExpr)
+                   lambda a: isinstance(a[1],CallExpr)
                           and is_funcdef_sipy_dtype(a[1].callee.node), enumerate(e.args)), (-1,None))[0]
             if dtype_idx > -1:
                 dtype_call = e.args[dtype_idx]
