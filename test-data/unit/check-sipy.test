@@ -182,7 +182,31 @@ t2: NDArray[Sec[np.int64]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtyp
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
+[case testBadAssignmentNumpyNoUnit]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+
+t: NDArray[np.float32] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=np.int64) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]")
+t2: NDArray[np.int64] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=np.float32) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]")
+t3: NDArray[np.float32] = np.zeros(3, dtype=np.int64) + np.ones(3, dtype=np.int64) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]")
+t4: NDArray[np.int64] = np.ones(6, dtype=np.float32) + np.zeros(6, dtype=np.float32) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]")
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testBadAssignmentNDArrayElementNoUnit]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+
+y0: float = 2.0
+y: NDArray[np.float64] = np.zeros(2,dtype=np.float64)
+y[0] = y0 # E: some kind of type mismatch
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
 [case testGoodAssignmentNDArrayElement]
+# flags: --python-version 3.10
 import numpy as np
 from numpy.typing import NDArray
 from src.SUnit1.SIUnit import M, dtype
@@ -193,13 +217,14 @@ y[0] = y0
 [builtins fixtures/builtins-fuller.pyi]
 
 [case testBadAssignmentNDArrayElement]
+# flags: --python-version 3.10
 import numpy as np
 from numpy.typing import NDArray
 from src.SUnit1.SIUnit import M, dtype
 
 y0: M[float] = M(2.0)
 y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
-y[0] = y0
+y[0] = y0 # E: some kind of type mismatch
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
