@@ -1,0 +1,62 @@
+[case testNumpySanityCheck]
+import numpy as np
+from numpy.typing import NDArray
+x: np.bool = np.float32(2) # E: Incompatible types in assignment (expression has type "floating[_32Bit]", variable has type "numpy.bool[builtins.bool]")
+y: NDArray[np.float32] = np.array([1,2,3],dtype=np.float32)
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testBadAssignmentFullNDArrays]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+
+t: NDArray[np.float32] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=np.int64) # E: Incompatible types in assignment (expression has type "ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]", variable has type "ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]")
+t2: NDArray[np.int64] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=np.float32) # E: Incompatible types in assignment (expression has type "ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]", variable has type "ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]")
+t3: NDArray[np.float32] = np.zeros(3, dtype=np.int64) + np.ones(3, dtype=np.int64) # E: Incompatible types in assignment (expression has type "ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]", variable has type "ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]")
+t4: NDArray[np.int64] = np.ones(6, dtype=np.float32) + np.zeros(6, dtype=np.float32) # E: Incompatible types in assignment (expression has type "ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]", variable has type "ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]")
+t = np.zeros(3, dtype=np.int64) + np.ones(3, dtype=np.int64) # E: Incompatible types in assignment (expression has type "ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]", variable has type "ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]")
+t2 = np.ones(6, dtype=np.float32) + np.zeros(6, dtype=np.float32) # E: Incompatible types in assignment (expression has type "ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]", variable has type "ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]")
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testBadAssignmentNDArrayElementNoUnit]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+
+y0: float = 2.0
+y: NDArray[np.float64] = np.zeros(2,dtype=np.float64)
+y[0] = y0 # error goes here
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+[out]
+main:7: error: No overload variant of "__setitem__" of "ndarray" matches argument types "int", "float"
+main:7: note: Possible overload variants:
+main:7: note:     def __setitem__(self, Union[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], Tuple[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], ...]], float64, /) -> None
+
+
+[case testSimpleAssignments]
+# flags: --python-version 3.10
+import numpy as np
+
+i8: np.int8 = np.int8(1)
+i16: np.int16 = np.int16(1)
+i32: np.int32 = np.int32(1)
+i64: np.int64 = np.int64(1)
+
+i64 = i32 # E: Incompatible types in assignment (expression has type "signedinteger[_32Bit]", variable has type "signedinteger[_64Bit]")
+i64 = np.int64(i32)
+i32 = i16 # E: Incompatible types in assignment (expression has type "signedinteger[_16Bit]", variable has type "signedinteger[_32Bit]")
+i32 = np.int32(i16)
+i16 = i8 # E: Incompatible types in assignment (expression has type "signedinteger[_8Bit]", variable has type "signedinteger[_16Bit]")
+
+f64: np.float64
+f32: np.float32
+f16: np.float16
+f64 = f32 # E: Incompatible types in assignment (expression has type "floating[_32Bit]", variable has type "float64")
+f64 = np.float64(f32)
+f32 = f16 # E: Incompatible types in assignment (expression has type "floating[_16Bit]", variable has type "floating[_32Bit]")
+
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]

@@ -71,13 +71,6 @@ class Sec(Time[NumericBase]):
         ...
 
 
-[case testNumpySanityCheck]
-import numpy as np
-from numpy.typing import NDArray
-x: np.bool = np.float32(2) # E: Incompatible types in assignment (expression has type "floating[_32Bit]", variable has type "numpy.bool[builtins.bool]")
-y: NDArray[np.float32] = np.array([1,2,3],dtype=np.float32)
-[typing fixtures/typing-fuller.pyi]
-[builtins fixtures/builtins-fuller.pyi]
 
 [case testGoodAnnotations]
 from src.SUnit1.SIUnit import M, Sec
@@ -182,28 +175,6 @@ t2: NDArray[Sec[np.int64]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtyp
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
-[case testBadAssignmentNumpyNoUnit]
-# flags: --python-version 3.10
-import numpy as np
-from numpy.typing import NDArray
-
-t: NDArray[np.float32] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=np.int64) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]")
-t2: NDArray[np.int64] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=np.float32) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]")
-t3: NDArray[np.float32] = np.zeros(3, dtype=np.int64) + np.ones(3, dtype=np.int64) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]")
-t4: NDArray[np.int64] = np.ones(6, dtype=np.float32) + np.zeros(6, dtype=np.float32) # E: Incompatible types in assignment (expression has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]")
-[typing fixtures/typing-fuller.pyi]
-[builtins fixtures/builtins-fuller.pyi]
-
-[case testBadAssignmentNDArrayElementNoUnit]
-# flags: --python-version 3.10
-import numpy as np
-from numpy.typing import NDArray
-
-y0: float = 2.0
-y: NDArray[np.float64] = np.zeros(2,dtype=np.float64)
-y[0] = y0 # E: some kind of type mismatch
-[typing fixtures/typing-fuller.pyi]
-[builtins fixtures/builtins-fuller.pyi]
 
 [case testGoodAssignmentNDArrayElement]
 # flags: --python-version 3.10
@@ -225,6 +196,27 @@ from src.SUnit1.SIUnit import M, dtype
 y0: M[float] = M(2.0)
 y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
 y[0] = y0 # E: some kind of type mismatch
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+-- Same unit (M) on both sides but mismatched numpy dtype (float32 vs float64).
+-- Distinct from testBadAssignmentNDArrayElement (which uses a plain "float", not even
+-- a numpy dtype): this specifically exercises method_fullname resolving __setitem__ on a
+-- CompoundType receiver, and the numpy_sipy plugin correctly reconstructing
+-- CompoundType(unit, scalar_type) per overload so the mismatch is still caught when the
+-- unit matches and only the wrapped numeric dtype differs.
+[case testBadAssignmentNDArrayElementUnitDtypeMismatch]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import M, dtype
+
+y0: M[np.float32] = M(np.float32(2.0))
+y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
+y[0] = y0 # E: No overload variant of "__setitem__" of "ndarray" matches argument types "int", "M[floating[_32Bit]]" \
+    # N: Possible overload variants: \
+    # N:     def __setitem__(self, Union[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], Tuple[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], ...]], M[float64], /) -> None \
+    # N:     def __setitem__(self, Union[str, List[str]], M[float64], /) -> None
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
