@@ -4543,9 +4543,26 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         """
         self.try_infer_partial_type_from_indexed_assignment(lvalue, rvalue)
         basetype = get_proper_type(self.expr_checker.accept(lvalue.base))
+        #TODO: reserve unit here
+
         method_type = self.expr_checker.analyze_external_member_access(
             "__setitem__", basetype, lvalue
         )
+        if isinstance(basetype, Instance) and basetype.type.fullname == 'numpy.ndarray':
+            assert len(basetype.args) == 2
+            dtype_arg = get_proper_type(basetype.args[1])
+            assert isinstance(dtype_arg,Instance) and dtype_arg.type.fullname == 'numpy.dtype'
+            scalar_type = get_proper_type(dtype_arg.args[0])
+            assert not isinstance(scalar_type, AnyType)
+            if isinstance(method_type,Overloaded):
+                new_items = []
+                for item in method_type.items:
+                    assert len(item.arg_types) == 2
+                    new_items.append(item.copy_modified(arg_types=item.arg_types[:-1] + [scalar_type]))
+                method_type = Overloaded(new_items)
+            else:
+                assert isinstance(method_type,CallableType)
+                method_type = method_type.copy_modified(arg_types=method_type.arg_types[:-1] + [scalar_type])
 
         lvalue.method_type = method_type
         res_type, _ = self.expr_checker.check_method_call(
