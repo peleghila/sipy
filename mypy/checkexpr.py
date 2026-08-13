@@ -1592,6 +1592,24 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     if reserved_units and not isinstance(reserved_units,AnyType):
                         args[dtype_idx] = dtype_call.args[0].index
 
+        math_pow_unit = None
+        if callable_name == 'math.pow' and len(args) == 2 and isinstance(callee_type, CallableType):
+            # mimic __pow__'s unit propagation (see unit_modify/make_computed_type) for the
+            # plain-function-call form math.pow(x, k)
+            with self.msg.filter_errors() as w:
+                arg0_type = get_proper_type(self.accept(args[0], always_allow_any=True))
+            if not w.has_new_errors() and is_sipy_base(arg0_type):
+                _, base_unit = ExpressionChecker.split_unit_type(arg0_type)
+                k = ExpressionChecker.get_numeric_literal_value(args[1])
+                if base_unit is not None and k is not None:
+                    math_pow_unit = ComputedType(base_unit, k, '**')
+                    callee_type = callee_type.copy_modified(
+                        arg_types=[
+                            CompoundType(base_unit, callee_type.arg_types[0]),
+                            callee_type.arg_types[1],
+                        ],
+                    )
+
         ret_type, callee_type = self.check_call(
             callee_type,
             args,
@@ -1615,6 +1633,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 e.callee.type_is = proper_callee.type_is
         if reserved_units:
             ret_type = CompoundType(reserved_units,ret_type,ret_type.line,ret_type.column)
+        if math_pow_unit is not None:
+            ret_type = CompoundType(math_pow_unit, ret_type, ret_type.line, ret_type.column)
         return ret_type
 
     def check_union_call_expr(self, e: CallExpr, object_type: UnionType, member: str) -> Type:
@@ -4079,21 +4099,9 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
             # if either side is a si, rip it out and leave the numeric
             # and recompose later
-            def split_unit_type(t: Type) -> (Type,Type|None):
-                if isinstance(t, CompoundType):
-                    return t.numeric_type, t.base_type
-                elif isinstance(t, Instance):
-                    if t.args:
-                        new_t,units = deunit_instance(t)
-                        assert len(units) <= 1
-                        return new_t,(units[0] if units else None)
-                    return t,None
-                else:
-                    return t,None
-
             other_type = left_type if base_type == right_type else right_type
-            base_type, base_unit = split_unit_type(base_type)
-            other_type, other_unit = split_unit_type(other_type)
+            base_type, base_unit = ExpressionChecker.split_unit_type(base_type)
+            other_type, other_unit = ExpressionChecker.split_unit_type(other_type)
 
             with self.msg.filter_errors() as w:
                 member = analyze_member_access(
@@ -6475,6 +6483,20 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             if isinstance(e.expr, IntExpr) or isinstance(e.expr, FloatExpr):
                 return -e.expr.value
         return None
+
+    @staticmethod
+    def split_unit_type(t: Type) -> tuple[Type, Type | None]:
+        """If t carries an SI unit, split it into (plain type, unit); else (t, None)."""
+        if isinstance(t, CompoundType):
+            return t.numeric_type, t.base_type
+        elif isinstance(t, Instance):
+            if t.args:
+                new_t, units = deunit_instance(t)
+                assert len(units) <= 1
+                return new_t, (units[0] if units else None)
+            return t, None
+        else:
+            return t, None
 
     def make_computed_type(self, op_name: str, left_type: Type, right_type: Type, context: Context) -> Type:
         def get_k() -> int | float | None:
