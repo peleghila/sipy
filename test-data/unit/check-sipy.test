@@ -144,6 +144,39 @@ tsq5: (Sec*Sec*Sec)[float] = math.pow(t1,3)
 tsq6: (Sec**3)[float] = math.pow(t1,3)
 tsq7: (Sec*Sec*Sec)[float] = math.pow(t2,3)
 tsq8: (Sec**3)[float] = math.pow(t2,3)
+tpow9: (Sec**0.5)[float] = math.pow(t1,0.5)
+tpow10: (Sec**0.5)[float] = math.pow(t1,0.5)
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+[case testBadMathPow]
+from src.SUnit1.SIUnit import Sec
+import math
+t1: Sec[int] = Sec(6)
+t2: Sec[float] = Sec(7.0)
+x: int
+y: float
+(math.pow(t1,x)) # E: some error
+(math.pow(t2,x)) # E: some error
+(math.pow(t1,y)) # E: some error
+(math.pow(t2,y)) # E: some error
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+[case testBadPow]
+from src.SUnit1.SIUnit import Sec
+import math
+t1: Sec[int] = Sec(6)
+t2: Sec[float] = Sec(7.0)
+x: int
+y: float
+(t1 ** x) # E: some error
+reveal_type(t1 ** x)
+(t2 ** x) # E: some error
+(t1 ** y) # E: some error
+(t2 ** y) # E: some error
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
 
 [case testGoodAssignmentMultDivPowNumpy]
 
@@ -175,6 +208,17 @@ t2: NDArray[Sec[np.int64]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtyp
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
+[case testBadAssignmentNumpyDtypeWrapper2]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import Sec, M, dtype
+
+t: NDArray[Sec[np.float32]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(M[np.float32])) # E: Incompatible types in assignment (expression has type "M[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[floating[_32Bit]]]]")
+t2: NDArray[Sec[np.int64]] = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], dtype=dtype(M[np.int64])) # E: Incompatible types in assignment (expression has type "M[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]", variable has type "Sec[ndarray[Tuple[Any, ...], dtype[signedinteger[_64Bit]]]]")
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
 
 [case testGoodAssignmentNDArrayElement]
 # flags: --python-version 3.10
@@ -200,6 +244,22 @@ y[0] = y0 # error here
 [builtins fixtures/builtins-fuller.pyi]
 [out]
 main:8: error: No overload variant of "__setitem__" of "ndarray" matches argument types "int", "M[float]"
+main:8: note: Possible overload variants:
+main:8: note:     def __setitem__(self, Union[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], Tuple[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], ...]], M[float64], /) -> None
+
+[case testBadAssignmentNDArrayElement2]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import M, Sec, dtype
+
+y0: Sec[np.float64] = Sec(np.float64(2.0))
+y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
+y[0] = y0 # error here
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+[out]
+main:8: error: No overload variant of "__setitem__" of "ndarray" matches argument types "int", "Sec[float64]"
 main:8: note: Possible overload variants:
 main:8: note:     def __setitem__(self, Union[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], Tuple[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], ...]], M[float64], /) -> None
 
