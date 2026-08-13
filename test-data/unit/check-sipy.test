@@ -195,9 +195,14 @@ from src.SUnit1.SIUnit import M, dtype
 
 y0: M[float] = M(2.0)
 y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
-y[0] = y0 # E: some kind of type mismatch
+y[0] = y0 # error here
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
+[out]
+main:8: error: No overload variant of "__setitem__" of "ndarray" matches argument types "int", "M[float]"
+main:8: note: Possible overload variants:
+main:8: note:     def __setitem__(self, Union[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], Tuple[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], ...]], M[float64], /) -> None
+
 
 -- Same unit (M) on both sides but mismatched numpy dtype (float32 vs float64).
 -- Distinct from testBadAssignmentNDArrayElement (which uses a plain "float", not even
@@ -216,7 +221,6 @@ y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
 y[0] = y0 # E: No overload variant of "__setitem__" of "ndarray" matches argument types "int", "M[floating[_32Bit]]" \
     # N: Possible overload variants: \
     # N:     def __setitem__(self, Union[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], Tuple[Union[SupportsIndex, slice, Any, Union[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]], _NestedSequence[_SupportsArray[dtype[Union[numpy.bool[builtins.bool], integer[Any]]]]], int, _NestedSequence[int]], None], ...]], M[float64], /) -> None \
-    # N:     def __setitem__(self, Union[str, List[str]], M[float64], /) -> None
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 

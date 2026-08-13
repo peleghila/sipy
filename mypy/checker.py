@@ -219,7 +219,7 @@ from mypy.types import (
     get_proper_type,
     get_proper_types,
     is_literal_type,
-    is_named_instance,
+    is_named_instance, CompoundType,
 )
 from mypy.types_utils import is_overlapping_none, remove_optional, store_argument_type, strip_type
 from mypy.typetraverser import TypeTraverserVisitor
@@ -4543,7 +4543,11 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         """
         self.try_infer_partial_type_from_indexed_assignment(lvalue, rvalue)
         basetype = get_proper_type(self.expr_checker.accept(lvalue.base))
-        #TODO: reserve unit here
+        # reserve unit here
+        reserved_units = None
+        if isinstance(basetype,CompoundType):
+            reserved_units = basetype.base_type
+            basetype = get_proper_type(basetype.numeric_type)
 
         method_type = self.expr_checker.analyze_external_member_access(
             "__setitem__", basetype, lvalue
@@ -4562,7 +4566,30 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 method_type = Overloaded(new_items)
             else:
                 assert isinstance(method_type,CallableType)
+                assert len(method_type.arg_types) == 2
                 method_type = method_type.copy_modified(arg_types=method_type.arg_types[:-1] + [scalar_type])
+
+        if reserved_units:
+            if isinstance(method_type, Overloaded):
+                new_items = []
+                for item in method_type.items:
+                    assert len(item.arg_types) == 2
+                    assert len(item.bound_args) == 1
+                    new_items.append(item.copy_modified(
+                        arg_types=item.arg_types[:-1] + [CompoundType(reserved_units,item.arg_types[-1],reserved_units.line,reserved_units.column)],
+                        bound_args=[CompoundType(reserved_units,item.bound_args[0],item.line,item.column)]
+                    ))
+                method_type = Overloaded(new_items)
+            else:
+                assert isinstance(method_type, CallableType)
+                assert len(method_type.arg_types) == 2
+                assert len(method_type.bound_args) == 1
+                method_type = method_type.copy_modified(
+                    arg_types=method_type.arg_types[:-1] + [CompoundType(reserved_units,item.arg_types[-1],reserved_units.line,reserved_units.column)],
+                    bound_args=[CompoundType(reserved_units,method_type.bound_args[0],method_type.line,method_type.column)]
+                )
+            # reconstruct basetype
+            basetype = CompoundType(reserved_units,basetype,basetype.line,basetype.column)
 
         lvalue.method_type = method_type
         res_type, _ = self.expr_checker.check_method_call(
