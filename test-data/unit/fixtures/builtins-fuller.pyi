@@ -2,12 +2,15 @@
 
 import _typeshed
 from typing import Iterable, Iterator, TypeVar, Generic, Sequence, Optional, overload, Tuple, Type, MutableSet, AbstractSet, MutableMapping, SupportsKeysAndGetItem, Union, Any
-from typing_extensions import Self
+from typing_extensions import Self, Literal, TypeAlias
 
 _T = TypeVar("_T")
 _KT = TypeVar("_KT")  # Key type.
 _VT = TypeVar("_VT")  # Value type.
 _Tco = TypeVar('_Tco', covariant=True)
+
+_PositiveInteger: TypeAlias = Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+_NegativeInteger: TypeAlias = Literal[-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12, -13, -14, -15, -16, -17, -18, -19, -20]
 
 class object:
     def __init__(self) -> None: pass
@@ -51,8 +54,20 @@ class int:
     def __rdivmod__(self, value: int, /) -> tuple[int, int]: ...
     def __neg__(self) -> 'int': pass
     def __pos__(self) -> 'int': pass
-
+    @overload
+    def __pow__(self, x: Literal[0], /) -> Literal[1]: ...
+    @overload
+    def __pow__(self, value: Literal[0], mod: None, /) -> Literal[1]: ...
+    @overload
+    def __pow__(self, value: _PositiveInteger, mod: None = None, /) -> int: ...
+    @overload
+    def __pow__(self, value: _NegativeInteger, mod: None = None, /) -> float: ...
+    # positive __value -> int; negative __value -> float
+    # return type must be Any as `int | float` causes too many false-positive errors
+    @overload
+    def __pow__(self, value: int, mod: None = None, /) -> Any: ...
     def __index__(self) -> int: pass
+
 class float:
     def __add__(self, value: float, /) -> float: ...
     def __sub__(self, value: float, /) -> float: ...
