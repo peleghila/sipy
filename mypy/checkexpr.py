@@ -4029,22 +4029,48 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             object_type=base_type,
         )
 
-    def unit_modify(self, member: CallableType,
+    def unit_modify(self, member: FunctionLike,
                     op_name: str,
                     base_type: ProperType,
                     base_unit: ProperType,
                     other_unit: ProperType,
-                    context: Context) -> CallableType:
+                    other_type: ProperType | None,
+                    context: Context) -> FunctionLike | None:
+        if isinstance(member, CallableType):
+            ret = self.unit_modify_callable(member,op_name,base_type,base_unit,other_unit,other_type,context)
+            return ret # None is the good signifier of error here
+        elif isinstance(member, Overloaded):
+            new_items = []
+            for item in member.items:
+                new_item = self.unit_modify_callable(item,op_name,base_type,base_unit,other_unit,other_type,context)
+                if new_item is not None:
+                    new_items.append(new_item)
+            if len(new_items) > 1:
+                return Overloaded(new_items)
+            elif len(new_items) == 1:
+                return new_items[0]
+            else:
+                return None
+
+    def unit_modify_callable(self, member: CallableType,
+                    op_name: str,
+                    base_type: ProperType,
+                    base_unit: ProperType,
+                    other_unit: ProperType,
+                    other_type: ProperType | None,
+                    context: Context) -> CallableType | None:
         assert is_subtype(base_type,member.bound_args[0])
         # modify all the args of member
         if op_name in {'__mul__', '__rmul__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__', '__pow__',
                        '__rpow__'}:
             # differentiate *, **, / from other ops
             if other_unit or op_name in {'__pow__','__rpow__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__'}:
+                computed_ret_unit = self.make_computed_type(op_name, base_unit, other_unit, other_type, context)
+                if computed_ret_unit is None: return None
                 return member.copy_modified(
                     #if you've reached Any, just stay at Any no units
                     ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
-                        self.make_computed_type(op_name, base_unit, other_unit, context),
+                        computed_ret_unit,
                         member.ret_type
                     ),
                     bound_args=[a if (isinstance(a, AnyType) or not base_unit) else CompoundType(base_unit,a) for a in member.bound_args],
@@ -4119,14 +4145,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 if w.has_new_errors():
                     return None
                 elif base_unit or other_unit: #units are involved
-                    if isinstance(member,CallableType):
-                        return self.unit_modify(member,op_name,base_type,base_unit,other_unit,context)
-                    elif isinstance(member, Overloaded):
-                        assert all(is_subtype(base_type, i.bound_args[0]) for i in member.items), (str(member.items), base_type)
-                        # do same thing for each and repackage
-                        new_items = [self.unit_modify(i,op_name,base_type,base_unit,other_unit,context)
-                                     for i in member.items]
-                        return Overloaded(new_items)
+                    if isinstance(member,FunctionLike):
+                        return self.unit_modify(member,op_name,base_type,base_unit,other_unit,other_type,context)
                     else:
                         assert False, type(member)
                 else:
@@ -4270,6 +4290,16 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         # call the __op__ method (even though it's missing).
 
         if not variants:
+            if op_name == '__pow__':
+                _, unit = ExpressionChecker.split_unit_type(get_proper_type(left_type))
+                if (
+                    unit is not None
+                    and ExpressionChecker.get_numeric_literal_value(right_expr) is None
+                    and ExpressionChecker.literal_value_from_type(get_proper_type(right_type)) is None
+                ):
+                    self.msg.sipy_pow_exponent_not_literal(context)
+                    error_any = AnyType(TypeOfAny.from_error)
+                    return error_any, error_any
             with self.msg.filter_errors(save_filtered_errors=True) as local_errors:
                 result = self.check_method_call_by_name(
                     op_name, left_type, [right_expr], [ARG_POS], context
@@ -6485,6 +6515,20 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         return None
 
     @staticmethod
+    def literal_value_from_type(t: Type | None) -> int | float | None:
+        """Extract a numeric value from a Literal[N]-typed expression's type."""
+        if t is None:
+            return None
+        proper_t = get_proper_type(t)
+        if (
+            isinstance(proper_t, LiteralType)
+            and isinstance(proper_t.value, (int, float))
+            and not isinstance(proper_t.value, bool)
+        ):
+            return proper_t.value
+        return None
+
+    @staticmethod
     def split_unit_type(t: Type) -> tuple[Type, Type | None]:
         """If t carries an SI unit, split it into (plain type, unit); else (t, None)."""
         if isinstance(t, CompoundType):
@@ -6498,20 +6542,27 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         else:
             return t, None
 
-    def make_computed_type(self, op_name: str, left_type: Type, right_type: Type, context: Context) -> Type:
+    def make_computed_type(self, op_name: str, left_type: Type, right_type: Type,
+                            exponent_type: Type | None, context: Context) -> Type | None:
         def get_k() -> int | float | None:
             assert isinstance(context, OpExpr)
             k_in = context.left if not left_type else context.right
-            return ExpressionChecker.get_numeric_literal_value(k_in)
+            val = ExpressionChecker.get_numeric_literal_value(k_in)
+            if val is not None:
+                return val
+            return ExpressionChecker.literal_value_from_type(exponent_type)
 
 
         if not left_type:
             if op_name == '__pow__': # k^Sec?
                 assert False # is this a thing
             elif op_name == '__rpow__': # Sec^k
+                k = get_k()
+                if k is None:
+                    return None
                 return ComputedType(
                     right_type,
-                    get_k(), #k
+                    k,
                     '**'
                 )
             elif op_name in {'__truediv__', '__floordiv__'}:
@@ -6523,9 +6574,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             else: return right_type
         elif not right_type:
             if op_name == '__pow__': #Sec^k
+                k = get_k()
+                if k is None:
+                    return None
                 return ComputedType(
                     left_type,
-                    get_k(), #k
+                    k,
                     '**'
                 )
             elif op_name == '__rpow__': #k^Sec

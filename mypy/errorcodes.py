@@ -316,6 +316,12 @@ BAD_SIPY_DTYPE: Final[ErrorCode] = ErrorCode(
     "sipy"
 )
 
+BAD_SIPY_POW_EXPONENT: Final[ErrorCode] = ErrorCode(
+    "pow-bad-exponent",
+    "Exponent of a unit-typed power operation must be a constant or a literal",
+    "sipy",
+)
+
 DEPRECATED: Final = ErrorCode(
     "deprecated",
     "Warn when importing or using deprecated (overloaded) functions, methods or classes",

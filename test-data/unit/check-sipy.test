@@ -156,10 +156,10 @@ t1: Sec[int] = Sec(6)
 t2: Sec[float] = Sec(7.0)
 x: int
 y: float
-(math.pow(t1,x)) # E: some error
-(math.pow(t2,x)) # E: some error
-(math.pow(t1,y)) # E: some error
-(math.pow(t2,y)) # E: some error
+(math.pow(t1,x)) # E: Exponent of a unit-typed math.pow must be a constant or a literal type
+(math.pow(t2,x)) # E: Exponent of a unit-typed math.pow must be a constant or a literal type
+(math.pow(t1,y)) # E: Exponent of a unit-typed math.pow must be a constant or a literal type
+(math.pow(t2,y)) # E: Exponent of a unit-typed math.pow must be a constant or a literal type
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
 
@@ -170,11 +170,19 @@ t1: Sec[int] = Sec(6)
 t2: Sec[float] = Sec(7.0)
 x: int
 y: float
-(t1 ** x) # E: some error
-reveal_type(t1 ** x)
-(t2 ** x) # E: some error
-(t1 ** y) # E: some error
-(t2 ** y) # E: some error
+(t1 ** x) # E: Exponent of a unit-typed ** must be a constant or a literal type
+(t2 ** x) # E: Exponent of a unit-typed ** must be a constant or a literal type
+(t1 ** y) # E: Exponent of a unit-typed ** must be a constant or a literal type
+(t2 ** y) # E: Exponent of a unit-typed ** must be a constant or a literal type
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+[case testGoodPowLiteralExponent]
+from src.SUnit1.SIUnit import Sec
+from typing import Literal
+t1: Sec[int] = Sec(6)
+k: Literal[2] = 2
+tsq: (Sec*Sec)[int] = t1 ** k
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
 
