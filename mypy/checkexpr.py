@@ -1600,15 +1600,24 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 arg0_type = get_proper_type(self.accept(args[0], always_allow_any=True))
             if not w.has_new_errors() and is_sipy_base(arg0_type):
                 _, base_unit = ExpressionChecker.split_unit_type(arg0_type)
-                k = ExpressionChecker.get_numeric_literal_value(args[1])
-                if base_unit is not None and k is not None:
-                    math_pow_unit = ComputedType(base_unit, k, '**')
-                    callee_type = callee_type.copy_modified(
-                        arg_types=[
-                            CompoundType(base_unit, callee_type.arg_types[0]),
-                            callee_type.arg_types[1],
-                        ],
-                    )
+                if base_unit is not None:
+                    k = ExpressionChecker.get_numeric_literal_value(args[1])
+                    if k is None:
+                        with self.msg.filter_errors() as w2:
+                            arg1_type = get_proper_type(self.accept(args[1], always_allow_any=True))
+                        if not w2.has_new_errors():
+                            k = ExpressionChecker.literal_value_from_type(arg1_type)
+                    if k is not None:
+                        math_pow_unit = ComputedType(base_unit, k, '**')
+                        callee_type = callee_type.copy_modified(
+                            arg_types=[
+                                CompoundType(base_unit, callee_type.arg_types[0]),
+                                callee_type.arg_types[1],
+                            ],
+                        )
+                    else:
+                        self.msg.sipy_pow_exponent_not_literal('math.pow', e)
+                        return AnyType(TypeOfAny.from_error)
 
         ret_type, callee_type = self.check_call(
             callee_type,
@@ -4297,7 +4306,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     and ExpressionChecker.get_numeric_literal_value(right_expr) is None
                     and ExpressionChecker.literal_value_from_type(get_proper_type(right_type)) is None
                 ):
-                    self.msg.sipy_pow_exponent_not_literal(context)
+                    self.msg.sipy_pow_exponent_not_literal('**', context)
                     error_any = AnyType(TypeOfAny.from_error)
                     return error_any, error_any
             with self.msg.filter_errors(save_filtered_errors=True) as local_errors:

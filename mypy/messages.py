@@ -2471,9 +2471,9 @@ class MessageBuilder:
             code=codes.BAD_SIPY_DTYPE
         )
 
-    def sipy_pow_exponent_not_literal(self, context: Context) -> None:
+    def sipy_pow_exponent_not_literal(self, op_display: str, context: Context) -> None:
         self.fail(
-            "Exponent of a unit-typed ** must be a constant or a literal type",
+            f"Exponent of a unit-typed {op_display} must be a constant or a literal type",
             context,
             code=codes.BAD_SIPY_POW_EXPONENT,
         )
