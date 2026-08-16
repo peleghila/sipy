@@ -1127,11 +1127,11 @@ class SubtypeVisitor(TypeVisitor[bool]):
 
 
     def visit_computed_type(self, t: ComputedType) -> bool:
-        def is_same_base_type(lhs: Type | int | float, rhs: Type | int | float) -> bool:
+        def is_same_base_type(lhs: Type | int, rhs: Type | int) -> bool:
             if isinstance(lhs, ComputedType) and isinstance(rhs,ComputedType):
                 return lhs.op == rhs.op and is_same_base_type(lhs.left,rhs.left) and is_same_base_type(lhs.right, rhs.right)
             else:
-                return lhs == rhs # TODO: do we want 2 == 2.0?
+                return lhs == rhs
 
         right = self.right
         if is_same_base_type(t,right):

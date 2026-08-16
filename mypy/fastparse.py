@@ -2014,7 +2014,7 @@ class TypeConverter:
                 left = left.literal_value
             if isinstance(right,RawExpressionType):
                 right = right.literal_value
-            if isinstance(n.op, ast3.Pow) and not isinstance(right, (int, float)):
+            if isinstance(n.op, ast3.Pow) and not isinstance(right, int):
                 return self.invalid_type(n)
             if isinstance(n.op, ast3.Div) and isinstance(right, (int,float)):
                 return self.invalid_type(n)

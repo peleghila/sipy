@@ -1012,22 +1012,23 @@ class ComputedType(ProperType):
     """Represents a SI computation in the type annotations"""
 
     __slots__ = ("left", "right", "op")
-    left: ProperType | int | float
-    right: ProperType | int | float
+    left: ProperType | int
+    right: ProperType | int
     op: str
 
     from ast import operator
 
     def __init__(
         self,
-        left: ProperType | int | float,
-        right: ProperType | int | float,
+        left: ProperType | int,
+        right: ProperType | int,
         op: str,
         line: int = -1,
         column: int = -1,
     ) -> None:
         super().__init__(line, column)
         assert isinstance(left, ProperType) or isinstance(right, ProperType)
+        assert isinstance(left, (ProperType, int)) and isinstance(right, (ProperType, int))
         assert not isinstance(left,AnyType) and not isinstance(right,AnyType)
         # if isinstance(left,ProperType):
         #     assert(isinstance(left,Instance) or isinstance(left, UnboundType) or isinstance(left, ComputedType))

@@ -1414,7 +1414,7 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
                 if self.report_invalid_types:
                     self.fail("Invalid type comment or annotation", lhs, code=codes.VALID_TYPE)
                 return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
-        elif isinstance(t.left, (int,float)):
+        elif isinstance(t.left, int):
             lhs = t.left
         else:
             return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
@@ -1424,7 +1424,7 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
                 if self.report_invalid_types:
                     self.fail("Invalid type comment or annotation", rhs, code=codes.VALID_TYPE)
                 return AnyType(TypeOfAny.from_error, line=rhs.line, column=rhs.column)
-        elif isinstance(t.right, (int, float)):
+        elif isinstance(t.right, int):
             rhs = t.right
         else:
             return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)

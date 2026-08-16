@@ -6507,31 +6507,39 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
     @staticmethod
     def is_numeric_literal_expr(e: Expression):
-        if isinstance(e, IntExpr) or isinstance(e, FloatExpr):
+        # float support disabled: ComputedType lhs/rhs is int-only now.
+        # if isinstance(e, IntExpr) or isinstance(e, FloatExpr):
+        if isinstance(e, IntExpr):
             return True
         elif isinstance(e, UnaryExpr) and e.op == '-':
-            if isinstance(e.expr, IntExpr) or isinstance(e.expr, FloatExpr):
+            # if isinstance(e.expr, IntExpr) or isinstance(e.expr, FloatExpr):
+            if isinstance(e.expr, IntExpr):
                 return True
         return False
 
     @staticmethod
-    def get_numeric_literal_value(e: Expression) -> int | float | None:
-        if isinstance(e, IntExpr) or isinstance(e, FloatExpr):
+    def get_numeric_literal_value(e: Expression) -> int | None:
+        # float support disabled: ComputedType lhs/rhs is int-only now.
+        # if isinstance(e, IntExpr) or isinstance(e, FloatExpr):
+        if isinstance(e, IntExpr):
             return e.value
         elif isinstance(e, UnaryExpr) and e.op == '-':
-            if isinstance(e.expr, IntExpr) or isinstance(e.expr, FloatExpr):
+            # if isinstance(e.expr, IntExpr) or isinstance(e.expr, FloatExpr):
+            if isinstance(e.expr, IntExpr):
                 return -e.expr.value
         return None
 
     @staticmethod
-    def literal_value_from_type(t: Type | None) -> int | float | None:
+    def literal_value_from_type(t: Type | None) -> int | None:
         """Extract a numeric value from a Literal[N]-typed expression's type."""
         if t is None:
             return None
         proper_t = get_proper_type(t)
         if (
             isinstance(proper_t, LiteralType)
-            and isinstance(proper_t.value, (int, float))
+            # float support disabled: ComputedType lhs/rhs is int-only now.
+            # and isinstance(proper_t.value, (int, float))
+            and isinstance(proper_t.value, int)
             and not isinstance(proper_t.value, bool)
         ):
             return proper_t.value
@@ -6553,7 +6561,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
     def make_computed_type(self, op_name: str, left_type: Type, right_type: Type,
                             exponent_type: Type | None, context: Context) -> Type | None:
-        def get_k() -> int | float | None:
+        def get_k() -> int | None:
             assert isinstance(context, OpExpr)
             k_in = context.left if not left_type else context.right
             val = ExpressionChecker.get_numeric_literal_value(k_in)
