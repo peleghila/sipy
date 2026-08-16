@@ -151,10 +151,18 @@ tsq5: (Sec*Sec*Sec)[float] = math.pow(t1,3)
 tsq6: (Sec**3)[float] = math.pow(t1,3)
 tsq7: (Sec*Sec*Sec)[float] = math.pow(t2,3)
 tsq8: (Sec**3)[float] = math.pow(t2,3)
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+[case testFractionAnnotations]
+from src.SUnit1.SIUnit import Sec
+import math
+t1: Sec[int] = Sec(6)
 tpow9: (Sec**0.5)[float] = math.pow(t1,0.5)
 tpow10: (Sec**0.5)[float] = math.pow(t1,0.5)
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
+
 
 [case testBadMathPow]
 from src.SUnit1.SIUnit import Sec

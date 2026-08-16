@@ -9,7 +9,7 @@ from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType
 
 from quiche import EGraph
 from quiche.lang.expr_lang import ExprNode, ExprTree
-from quiche.rewrite import Rule
+from quiche.rewrite import Rule, ConditionalRule
 
 base_type_name = "src.SUnit1.SIUnit.SIUnit"
 dtype_name = "src.SUnit1.SIUnit.dtype"
@@ -139,6 +139,39 @@ class EgraphTypeCompare:
     def rule_apply():
         Rule.apply_rules(EgraphTypeCompare.egraph_rules, EgraphTypeCompare.egraph)
 
+
+    class IntSuccessorRule(ConditionalRule):
+        """n -> (n - 1) + 1, for any integer n, if (n - 1) is also present."""
+
+        def __init__(self):
+            super().__init__(lhs=None, rhs=None)
+
+        def search(self, egraph):
+            return [
+                (eid, {"n": node.key})
+                for eid, enodes in egraph.eclasses().items()
+                for node in enodes
+                if isinstance(node.key, int) and not node.args
+            ]
+
+        @staticmethod
+        def literal_present(egraph, value) -> bool:
+            return any(
+                node.key == value and not node.args
+                for enodes in egraph.eclasses().values()
+                for node in enodes
+            )
+        def check_condition(self, egraph, eid, env) -> bool:
+            return self.literal_present(egraph, env["n"] - 1)
+
+        def apply_to_eclass(self, egraph, eid, env):
+            if not self.check_condition(egraph, eid, env):
+                return eid
+            n = env["n"]
+            n_minus_1_id = egraph.add(ExprTree(ExprNode(n - 1, ())))
+            one_id = egraph.add(ExprTree(ExprNode(1, ())))
+            from quiche import ENode
+            return egraph.add_enode(ENode("+", (n_minus_1_id, one_id)))
     @staticmethod
     def egraph_reduces_to_1(t: ComputedType) -> bool:
         teclass = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t)))
@@ -157,7 +190,10 @@ class EgraphTypeCompare:
         ExprTree.make_rule(lambda x: (x / 1, x)),
         ExprTree.make_rule(lambda x: (x ** -1, 1/x)),
         ExprTree.make_rule(lambda x: (x * x, x ** 2)),
-        ExprTree.make_rule(lambda x: (x ** 2, x * x))
+        ExprTree.make_rule(lambda x: (x ** 2, x * x)),
+        # ExprTree.make_rule(lambda x: (x ** 0, 1)),
+        ExprTree.make_rule(lambda x,y: ((x ** y) * x, x ** (y + 1))),
+        IntSuccessorRule()
     ]
 
     @staticmethod
