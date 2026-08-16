@@ -1414,16 +1414,20 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
                 if self.report_invalid_types:
                     self.fail("Invalid type comment or annotation", lhs, code=codes.VALID_TYPE)
                 return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
-        else:
+        elif isinstance(t.left, (int,float)):
             lhs = t.left
+        else:
+            return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
         if isinstance(t.right, ProperType):
             rhs = self.anal_type(t.right)
             if not is_sipy_base(rhs):
                 if self.report_invalid_types:
                     self.fail("Invalid type comment or annotation", rhs, code=codes.VALID_TYPE)
                 return AnyType(TypeOfAny.from_error, line=rhs.line, column=rhs.column)
-        else:
+        elif isinstance(t.right, (int, float)):
             rhs = t.right
+        else:
+            return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
         return ComputedType(lhs,rhs,t.op,t.line,t.column)
 
     def analyze_callable_args_for_paramspec(

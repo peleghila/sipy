@@ -2014,6 +2014,12 @@ class TypeConverter:
                 left = left.literal_value
             if isinstance(right,RawExpressionType):
                 right = right.literal_value
+            if isinstance(n.op, ast3.Pow) and not isinstance(right, (int, float)):
+                return self.invalid_type(n)
+            if isinstance(n.op, ast3.Div) and isinstance(right, (int,float)):
+                return self.invalid_type(n)
+            if (hasattr(left,'args') and left.args) or (hasattr(right,'args') and right.args):
+                return self.invalid_type(n,"Operations must be between unit types (did you forget parentheses?)")
             return ComputedType(
                 left, right, self.binop[n.op.__class__.__name__],
                 line=self.line,

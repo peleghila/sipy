@@ -76,6 +76,7 @@ class Sec(Time[NumericBase]):
 from src.SUnit1.SIUnit import M, Sec
 g: (M/Sec**2)[float] = (M/Sec**2)(9.8)
 y: (M*M)[float] = (M**2)(2)
+z: (1/Sec)[int] = (Sec**-1)(4)
 
 [case testGoodAnnotationsNumpy]
 from src.SUnit1.SIUnit import Sec, dtype
@@ -90,11 +91,17 @@ from src.SUnit1.SIUnit import M
 
 x: int / int = 2 # E: Invalid type comment or annotation
 y: 2 * 2 = 3 # E: Invalid type comment or annotation
+y2: (2 * 2)[int] = 3 # E: Invalid type comment or annotation
+z0: (dict * dict)[float] # E: Invalid type comment or annotation
 z: M + M = 4 # E: Invalid type comment or annotation
+z2: (M + M)[float] = 4 # E: Invalid type comment or annotation
 a: M - M = 5 # E: Invalid type comment or annotation
 b: 2**M = 6 # E: Invalid type comment or annotation
-blah: M*M = 6 # E: units must have a numeric type
-tsq1: M*M[int] = 8 # E: Invalid type comment or annotation
+c: M/2 = 6 # E: Invalid type comment or annotation
+blah: M*M = 6 # E: Units must have a numeric type
+tsq1: M*M[int] = 8 # E: Invalid type comment or annotation \
+            # N: Operations must be between unit types (did you forget parentheses?)
+q: (M**'str')[int] = 6 # E: Invalid type comment or annotation
 
 
 [case testGoodAssignmentsAddSub]

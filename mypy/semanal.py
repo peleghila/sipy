@@ -293,7 +293,7 @@ from mypy.types import (
     get_proper_types,
     is_named_instance,
     remove_dups,
-    type_vars_as_args, CompoundType,
+    type_vars_as_args, CompoundType, ComputedType,
 )
 from mypy.types_utils import is_invalid_recursive_alias, store_argument_type
 from mypy.typevars import fill_typevars
@@ -3789,6 +3789,10 @@ class SemanticAnalyzer(
                         analyzed.line,
                         analyzed.column
                     )
+            if isinstance(analyzed, ComputedType):
+                # Computation with no numeric
+                self.fail("Units must have a numeric type", analyzed, code=codes.VALID_TYPE)
+                analyzed = AnyType(TypeOfAny.from_error, line=analyzed.line, column=analyzed.column)
             if hasattr(analyzed, 'args') and analyzed.args:
                 clean_t, units = deunit_instance(analyzed)
                 if len(units) == 1:
