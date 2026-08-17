@@ -2006,22 +2006,26 @@ class TypeConverter:
                 is_evaluated=self.is_evaluated
             )
         if isinstance(n.op,(ast3.Mult, ast3.Pow, ast3.Div)):
-            left = self.visit(n.left)
-            right = self.visit(n.right)
-            if isinstance(left,RawExpressionType) and isinstance(right,RawExpressionType):
+            _left: ProperType | int = self.visit(n.left)
+            _right: ProperType | int = self.visit(n.right)
+            if isinstance(_left,RawExpressionType) and isinstance(_right,RawExpressionType):
                 return self.invalid_type(n)
-            if isinstance(left,RawExpressionType):
-                left = left.literal_value
-            if isinstance(right,RawExpressionType):
-                right = right.literal_value
-            if isinstance(n.op, ast3.Pow) and not isinstance(right, int):
+            if isinstance(_left,RawExpressionType):
+                if not isinstance(_left.literal_value, int):
+                    return self.invalid_type(n)
+                _left = _left.literal_value
+            if isinstance(_right,RawExpressionType):
+                if not isinstance(_right.literal_value, int):
+                    return self.invalid_type(n)
+                _right = _right.literal_value
+            if isinstance(n.op, ast3.Pow) and not isinstance(_right, int):
                 return self.invalid_type(n)
-            if isinstance(n.op, ast3.Div) and isinstance(right, (int,float)):
+            if isinstance(n.op, ast3.Div) and isinstance(_right, (int,float)):
                 return self.invalid_type(n)
-            if (hasattr(left,'args') and left.args) or (hasattr(right,'args') and right.args):
+            if (hasattr(_left,'args') and _left.args) or (hasattr(_right,'args') and _right.args):
                 return self.invalid_type(n,"Operations must be between unit types (did you forget parentheses?)")
             return ComputedType(
-                left, right, self.binop[n.op.__class__.__name__],
+                _left, _right, self.binop[n.op.__class__.__name__],
                 line=self.line,
                 column=self.convert_column(n.col_offset)
             )
@@ -2140,6 +2144,8 @@ class TypeConverter:
         elif isinstance(value, ComputedType):
             # compound type, e.g., Km [ int ].
             assert len(params) == 1
+            if not isinstance(params[0], ProperType):
+                return self.invalid_type(n)
             return CompoundType(
                 value,
                 params[0],

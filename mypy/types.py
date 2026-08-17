@@ -1027,7 +1027,6 @@ class ComputedType(ProperType):
         column: int = -1,
     ) -> None:
         super().__init__(line, column)
-        assert isinstance(left, ProperType) or isinstance(right, ProperType)
         assert isinstance(left, (ProperType, int)) and isinstance(right, (ProperType, int))
         assert not isinstance(left,AnyType) and not isinstance(right,AnyType)
         # if isinstance(left,ProperType):
@@ -1074,6 +1073,7 @@ class CompoundType(ProperType):
         super().__init__(line, column)
         assert not isinstance(base, AnyType)
         assert not isinstance(numeric, AnyType)
+        # assert isinstance(numeric,ProperType)
         self.base_type = base
         self.numeric_type = numeric
         if isinstance(self.base_type, Instance):

@@ -1,13 +1,16 @@
-from typing import List
+from typing import List, Dict, Tuple
 
-from mypy.nodes import MypyFile, TypeInfo, FuncDef, TypeAlias
+from quiche.egraph import Subst
+
+import mypy.types
+from mypy.nodes import MypyFile, TypeInfo, FuncDef, TypeAlias, SymbolNode
 from mypy.type_visitor import T
 from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType, UnboundType, TypeVarType, \
     TypeAliasType, UninhabitedType, UnionType, Type, NoneType, CallableType, TupleType, TypeType, LiteralType, \
     UnpackType, PartialType, TypedDictType, Overloaded, TypeVarTupleType, Parameters, ParamSpecType, DeletedType, \
     ErasedType, PlaceholderType, RawExpressionType, EllipsisType, CallableArgument, TypeList
 
-from quiche import EGraph
+from quiche import EGraph, EClassID
 from quiche.lang.expr_lang import ExprNode, ExprTree
 from quiche.rewrite import Rule, ConditionalRule
 
@@ -16,7 +19,7 @@ dtype_name = "src.SUnit1.SIUnit.dtype"
 base_type_module, base_type_classname = base_type_name.rsplit('.', maxsplit=1)
 base_type_filename = "D:\\code\\units1\\src\\SUnit1\\SIUnit.py"
 
-def get_base_type(modules: dict[str,MypyFile]):
+def get_base_type(modules: Dict[str,MypyFile]) -> SymbolNode | None:
     if base_type_module not in modules:
         return None
     module = modules[base_type_module]
@@ -49,7 +52,7 @@ def is_sipy_base(candidate: ProperType) -> bool:
             return False
         def visit_overloaded(self, t: Overloaded) -> bool:
             return False
-        def visit_param_spec(self, t: ParamSpecType) -> T:
+        def visit_param_spec(self, t: ParamSpecType) -> bool:
             return False
         def visit_type_type(self, t: TypeType) -> bool:
             return False
@@ -61,7 +64,7 @@ def is_sipy_base(candidate: ProperType) -> bool:
             return False
         def visit_deleted_type(self, t: DeletedType) -> bool:
             return False
-        def visit_type_var_tuple(self, t: TypeVarTupleType) -> T:
+        def visit_type_var_tuple(self, t: TypeVarTupleType) -> bool:
             return False
 
         def visit_type_list(self, t: TypeList) -> bool:
@@ -70,30 +73,32 @@ def is_sipy_base(candidate: ProperType) -> bool:
         def visit_callable_argument(self, t: CallableArgument) -> bool:
             pass
 
-        def visit_placeholder_type(self, t: PlaceholderType) -> T:
+        def visit_placeholder_type(self, t: PlaceholderType) -> bool:
             pass
 
-        def visit_erased_type(self, t: ErasedType) -> T:
-            pass
-
-
-        def visit_partial_type(self, t: PartialType) -> T:
+        def visit_erased_type(self, t: ErasedType) -> bool:
             pass
 
 
-        def visit_typeddict_type(self, t: TypedDictType) -> T:
+        def visit_partial_type(self, t: PartialType) -> bool:
+            pass
+
+
+        def visit_typeddict_type(self, t: TypedDictType) -> bool:
             return any(item.accept(self) for item in t.items.values())
         def visit_union_type(self, t: UnionType) -> bool:
             return any(item.accept(self) for item in t.items)
         def visit_tuple_type(self, t: TupleType) -> bool:
             return any(item.accept(self) for item in t.items)
-        def visit_parameters(self, t: Parameters) -> T:
+        def visit_parameters(self, t: Parameters) -> bool:
             return any(item.accept(self) for item in t.arg_types)
 
 
         def visit_type_alias_type(self, t: TypeAliasType) -> bool:
+            if t.alias is None:
+                return False
             return t.alias.target.accept(self)
-        def visit_unpack_type(self, t: UnpackType) -> T:
+        def visit_unpack_type(self, t: UnpackType) -> bool:
             return t.type.accept(self)
 
         def visit_compound_type(self, t: CompoundType) -> bool:
@@ -136,17 +141,17 @@ class EgraphTypeCompare:
 
     egraph = EGraph()
     @staticmethod
-    def rule_apply():
+    def rule_apply() -> None:
         Rule.apply_rules(EgraphTypeCompare.egraph_rules, EgraphTypeCompare.egraph)
 
 
     class IntSuccessorRule(ConditionalRule):
         """n -> (n - 1) + 1, for any integer n, if (n - 1) is also present."""
 
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__(lhs=None, rhs=None)
 
-        def search(self, egraph):
+        def search(self, egraph: EGraph) -> Tuple[EClassID,Dict[str,int]]:
             return [
                 (eid, {"n": node.key})
                 for eid, enodes in egraph.eclasses().items()
@@ -155,16 +160,16 @@ class EgraphTypeCompare:
             ]
 
         @staticmethod
-        def literal_present(egraph, value) -> bool:
+        def literal_present(egraph: EGraph, value: int) -> bool:
             return any(
                 node.key == value and not node.args
                 for enodes in egraph.eclasses().values()
                 for node in enodes
             )
-        def check_condition(self, egraph, eid, env) -> bool:
+        def check_condition(self, egraph: EGraph, eid: EClassID, env: Subst) -> bool:
             return self.literal_present(egraph, env["n"] - 1)
 
-        def apply_to_eclass(self, egraph, eid, env):
+        def apply_to_eclass(self, egraph: EGraph, eid: EClassID, env: Subst) -> EClassID:
             if not self.check_condition(egraph, eid, env):
                 return eid
             n = env["n"]
@@ -207,14 +212,19 @@ class EgraphTypeCompare:
         return is_eq
 
 
-def deunit_instance(t: Type) -> (Type, List[Type]):
-    if isinstance(t, Instance) or isinstance(t, TypeAliasType):
+def deunit_instance(t: ProperType) -> Tuple[ProperType, List[ProperType]]:
+    assert isinstance(t,ProperType),t
+    if isinstance(t, (Instance,TypeAliasType)):
         if not t.args:
             return t, []
         else:
-            new_args = []
+            new_args: List[Type] = []
             collected_units = []
-            for a in t.args:
+            for _a in t.args:
+                if isinstance(_a, TypeAliasType) and _a.alias is not None and _a.is_recursive:  # Recursive aliases (e.g. R = Dict[str, R]) can't be finitely unrolled;                                        # treat them as unit-free rather than expanding them forever.
+                    new_args.append(_a)
+                    continue
+                a = mypy.types.get_proper_type(_a)
                 if is_sipy_base(a):
                     # separate out the unit
                     if isinstance(a, CompoundType):
@@ -222,13 +232,13 @@ def deunit_instance(t: Type) -> (Type, List[Type]):
                         collected_units.append(a.base_type)
                     elif isinstance(a, Instance):
                         assert len(a.args) == 1
-                        new_args.append(a.args[0])
-                        collected_units.append(a.copy_modified(args=()))
+                        new_args.append(mypy.types.get_proper_type(a.args[0]))
+                        collected_units.append(a.copy_modified(args=[]))
                 else:
                     new_a, a_units = deunit_instance(a)
                     new_args.append(new_a)
                     collected_units.extend(a_units)
-            new_t = t.copy_modified(args=tuple(new_args))
+            new_t = t.copy_modified(args=list(new_args))
             return new_t, collected_units
     else:
         return t, []

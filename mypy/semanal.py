@@ -3778,23 +3778,24 @@ class SemanticAnalyzer(
             if analyzed is None or has_placeholder(analyzed):
                 self.defer(s)
                 return
-            if isinstance(analyzed, Instance):
+            proper_analyzed = get_proper_type(analyzed)
+            if isinstance(proper_analyzed, Instance):
                 if is_sipy_base(analyzed):
                     # TODO: error if no numeric base
-                    numeric_base = analyzed.args[0]
+                    numeric_base = get_proper_type(proper_analyzed.args[0])
                     # replace with compound type
                     analyzed = CompoundType(
-                        analyzed,
+                        proper_analyzed,
                         numeric_base,
-                        analyzed.line,
-                        analyzed.column
+                        proper_analyzed.line,
+                        proper_analyzed.column
                     )
-            if isinstance(analyzed, ComputedType):
+            elif isinstance(proper_analyzed, ComputedType):
                 # Computation with no numeric
-                self.fail("Units must have a numeric type", analyzed, code=codes.VALID_TYPE)
+                self.fail("Units must have a numeric type", proper_analyzed, code=codes.VALID_TYPE)
                 analyzed = AnyType(TypeOfAny.from_error, line=analyzed.line, column=analyzed.column)
             if hasattr(analyzed, 'args') and analyzed.args:
-                clean_t, units = deunit_instance(analyzed)
+                clean_t, units = deunit_instance(get_proper_type(analyzed))
                 if len(units) == 1:
                     # Extract and turn into a compound
                     analyzed = CompoundType(

@@ -1641,9 +1641,11 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             if proper_callee.type_is is not None:
                 e.callee.type_is = proper_callee.type_is
         if reserved_units:
-            ret_type = CompoundType(reserved_units,ret_type,ret_type.line,ret_type.column)
+            assert math_pow_unit is None
+            ret_type = CompoundType(reserved_units,get_proper_type(ret_type),ret_type.line,ret_type.column)
         if math_pow_unit is not None:
-            ret_type = CompoundType(math_pow_unit, ret_type, ret_type.line, ret_type.column)
+            assert reserved_units is None
+            ret_type = CompoundType(math_pow_unit, get_proper_type(ret_type), ret_type.line, ret_type.column)
         return ret_type
 
     def check_union_call_expr(self, e: CallExpr, object_type: UnionType, member: str) -> Type:
@@ -6506,7 +6508,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         )
 
     @staticmethod
-    def is_numeric_literal_expr(e: Expression):
+    def is_numeric_literal_expr(e: Expression) -> bool:
         # float support disabled: ComputedType lhs/rhs is int-only now.
         # if isinstance(e, IntExpr) or isinstance(e, FloatExpr):
         if isinstance(e, IntExpr):
@@ -6548,6 +6550,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
     @staticmethod
     def split_unit_type(t: Type) -> tuple[Type, Type | None]:
         """If t carries an SI unit, split it into (plain type, unit); else (t, None)."""
+        if not isinstance(t, ProperType):
+            return t, None
         if isinstance(t, CompoundType):
             return t.numeric_type, t.base_type
         elif isinstance(t, Instance):
@@ -6559,7 +6563,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         else:
             return t, None
 
-    def make_computed_type(self, op_name: str, left_type: Type, right_type: Type,
+
+    def make_computed_type(self, op_name: str, left_type: ProperType, right_type: ProperType,
                             exponent_type: Type | None, context: Context) -> Type | None:
         def get_k() -> int | None:
             assert isinstance(context, OpExpr)

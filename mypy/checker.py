@@ -4376,10 +4376,10 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 isinstance(proper_rvalue_type, Instance)
                 and proper_rvalue_type.type.fullname == 'numpy.ndarray'
                 # if the function returned ndarray[_, Any]:
-                and isinstance(proper_rvalue_type.args[1], Instance)
-                and proper_rvalue_type.args[1].type
-                and proper_rvalue_type.args[1].args
-                and isinstance(proper_rvalue_type.args[1].args[0],AnyType)
+                and isinstance(proper_arg_type := get_proper_type(proper_rvalue_type.args[1]), Instance)
+                and proper_arg_type.type
+                and proper_arg_type.args
+                and isinstance(get_proper_type(proper_arg_type.args[0]),AnyType)
             ):
                 # Try re-inferring r.h.s. in empty context
                 with self.msg.filter_errors() as local_errors:
@@ -4547,7 +4547,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         reserved_units = None
         if isinstance(basetype,CompoundType):
             reserved_units = basetype.base_type
-            basetype = get_proper_type(basetype.numeric_type)
+            basetype = basetype.numeric_type
 
         method_type = self.expr_checker.analyze_external_member_access(
             "__setitem__", basetype, lvalue
@@ -4558,21 +4558,23 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
             assert isinstance(dtype_arg,Instance) and dtype_arg.type.fullname == 'numpy.dtype'
             scalar_type = get_proper_type(dtype_arg.args[0])
             assert not isinstance(scalar_type, AnyType)
-            if isinstance(method_type,Overloaded):
+            proper_method_type = get_proper_type(method_type)
+            if isinstance(proper_method_type,Overloaded):
                 new_items = []
-                for item in method_type.items:
+                for item in proper_method_type.items:
                     assert len(item.arg_types) == 2
                     new_items.append(item.copy_modified(arg_types=item.arg_types[:-1] + [scalar_type]))
                 method_type = Overloaded(new_items)
             else:
-                assert isinstance(method_type,CallableType)
-                assert len(method_type.arg_types) == 2
+                assert isinstance(proper_method_type,CallableType)
+                assert len(proper_method_type.arg_types) == 2
                 method_type = method_type.copy_modified(arg_types=method_type.arg_types[:-1] + [scalar_type])
 
         if reserved_units:
-            if isinstance(method_type, Overloaded):
+            proper_method_type = get_proper_type(method_type)
+            if isinstance(proper_method_type, Overloaded):
                 new_items = []
-                for item in method_type.items:
+                for item in proper_method_type.items:
                     assert len(item.arg_types) == 2
                     assert len(item.bound_args) == 1
                     new_items.append(item.copy_modified(
@@ -4581,12 +4583,12 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                     ))
                 method_type = Overloaded(new_items)
             else:
-                assert isinstance(method_type, CallableType)
-                assert len(method_type.arg_types) == 2
-                assert len(method_type.bound_args) == 1
-                method_type = method_type.copy_modified(
-                    arg_types=method_type.arg_types[:-1] + [CompoundType(reserved_units,item.arg_types[-1],reserved_units.line,reserved_units.column)],
-                    bound_args=[CompoundType(reserved_units,method_type.bound_args[0],method_type.line,method_type.column)]
+                assert isinstance(proper_method_type, CallableType)
+                assert len(proper_method_type.arg_types) == 2
+                assert len(proper_method_type.bound_args) == 1
+                method_type = proper_method_type.copy_modified(
+                    arg_types=proper_method_type.arg_types[:-1] + [CompoundType(reserved_units,item.arg_types[-1],reserved_units.line,reserved_units.column)],
+                    bound_args=[CompoundType(reserved_units,proper_method_type.bound_args[0],proper_method_type.line,proper_method_type.column)]
                 )
             # reconstruct basetype
             basetype = CompoundType(reserved_units,basetype,basetype.line,basetype.column)
