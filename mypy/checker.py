@@ -4373,7 +4373,8 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                     self.store_types(type_map)
             proper_rvalue_type = get_proper_type(rvalue_type)
             if (
-                isinstance(proper_rvalue_type, Instance)
+                lvalue_type is not None
+                and isinstance(proper_rvalue_type, Instance)
                 and proper_rvalue_type.type.fullname == 'numpy.ndarray'
                 # if the function returned ndarray[_, Any]:
                 and isinstance(proper_arg_type := get_proper_type(proper_rvalue_type.args[1]), Instance)
@@ -4568,7 +4569,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
             else:
                 assert isinstance(proper_method_type,CallableType)
                 assert len(proper_method_type.arg_types) == 2
-                method_type = method_type.copy_modified(arg_types=method_type.arg_types[:-1] + [scalar_type])
+                method_type = proper_method_type.copy_modified(arg_types=proper_method_type.arg_types[:-1] + [scalar_type])
 
         if reserved_units:
             proper_method_type = get_proper_type(method_type)

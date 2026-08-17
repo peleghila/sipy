@@ -4043,14 +4043,15 @@ class ExpressionChecker(ExpressionVisitor[Type]):
     def unit_modify(self, member: FunctionLike,
                     op_name: str,
                     base_type: ProperType,
-                    base_unit: ProperType,
-                    other_unit: ProperType,
+                    base_unit: ProperType | None,
+                    other_unit: ProperType | None,
                     other_type: ProperType | None,
                     context: Context) -> FunctionLike | None:
         if isinstance(member, CallableType):
             ret = self.unit_modify_callable(member,op_name,base_type,base_unit,other_unit,other_type,context)
             return ret # None is the good signifier of error here
-        elif isinstance(member, Overloaded):
+        else:
+            assert isinstance(member, Overloaded)
             new_items = []
             for item in member.items:
                 new_item = self.unit_modify_callable(item,op_name,base_type,base_unit,other_unit,other_type,context)
@@ -4063,11 +4064,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             else:
                 return None
 
+
     def unit_modify_callable(self, member: CallableType,
                     op_name: str,
                     base_type: ProperType,
-                    base_unit: ProperType,
-                    other_unit: ProperType,
+                    base_unit: ProperType | None,
+                    other_unit: ProperType | None,
                     other_type: ProperType | None,
                     context: Context) -> CallableType | None:
         assert is_subtype(base_type,member.bound_args[0])
@@ -4302,11 +4304,11 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
         if not variants:
             if op_name == '__pow__':
-                _, unit = ExpressionChecker.split_unit_type(get_proper_type(left_type))
+                _, unit = ExpressionChecker.split_unit_type(left_type)
                 if (
                     unit is not None
                     and ExpressionChecker.get_numeric_literal_value(right_expr) is None
-                    and ExpressionChecker.literal_value_from_type(get_proper_type(right_type)) is None
+                    and ExpressionChecker.literal_value_from_type(right_type) is None
                 ):
                     self.msg.sipy_pow_exponent_not_literal('**', context)
                     error_any = AnyType(TypeOfAny.from_error)
@@ -6548,7 +6550,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         return None
 
     @staticmethod
-    def split_unit_type(t: Type) -> tuple[Type, Type | None]:
+    def split_unit_type(t: Type) -> tuple[Type, ProperType | None]:
         """If t carries an SI unit, split it into (plain type, unit); else (t, None)."""
         if not isinstance(t, ProperType):
             return t, None
