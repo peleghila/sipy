@@ -501,7 +501,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
         left = None
         if isinstance(o.left, NameExpr):
-            if not is_info_sipy_base(o.left.node):
+            if not isinstance(o.left.node,TypeInfo) or not is_info_sipy_base(o.left.node):
                 left = None
             else:
                 left = Instance(o.left.node, ())
@@ -517,7 +517,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
         right = None
         if isinstance(o.right, NameExpr):
-            if not is_info_sipy_base(o.right.node):
+            if not isinstance(o.right.node,TypeInfo) or not is_info_sipy_base(o.right.node):
                 right = None
             else:
                 right = Instance(o.right.node, ())
@@ -4072,48 +4072,78 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     other_unit: ProperType | None,
                     other_type: ProperType | None,
                     context: Context) -> CallableType | None:
-        assert is_subtype(base_type,member.bound_args[0])
+        assert member.bound_args[0] and is_subtype(base_type,member.bound_args[0])
+
+        def _make_list_with_unit(unit: ProperType | None, a: Type) -> Type:
+            if unit is None:
+                return a
+            else:
+                a_ = get_proper_type(a)
+                if isinstance(a_, AnyType):
+                    return a_
+                else:
+                    return CompoundType(unit, a_)
+
+        def make_list_with_unit_optional(unit: ProperType | None, typelist: Iterable[Optional[Type]]) -> List[
+            Optional[Type]]:
+            new_list: List[Optional[Type]] = []
+            for a in typelist:
+                if a is None:
+                    new_list.append(a)
+                else:
+                    new_list.append(_make_list_with_unit(unit, a))
+            return new_list
+
+        def make_list_with_unit(unit: ProperType | None, typelist: Iterable[Type]) -> List[Type]:
+            new_list = []
+            for a in typelist:
+                new_list.append(_make_list_with_unit(unit, a))
+            return new_list
         # modify all the args of member
         if op_name in {'__mul__', '__rmul__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__', '__pow__',
                        '__rpow__'}:
             # differentiate *, **, / from other ops
             if other_unit or op_name in {'__pow__','__rpow__', '__truediv__', '__rtruediv__', '__floordiv__', '__rfloordiv__'}:
                 computed_ret_unit = self.make_computed_type(op_name, base_unit, other_unit, other_type, context)
-                if computed_ret_unit is None: return None
+                if computed_ret_unit is None:
+                    return None
+                proper_ret_type = get_proper_type(member.ret_type)
                 return member.copy_modified(
                     #if you've reached Any, just stay at Any no units
-                    ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
+                    ret_type=proper_ret_type if isinstance(proper_ret_type, AnyType) or proper_ret_type is None else CompoundType(
                         computed_ret_unit,
-                        member.ret_type
+                        proper_ret_type
                     ),
-                    bound_args=[a if (isinstance(a, AnyType) or not base_unit) else CompoundType(base_unit,a) for a in member.bound_args],
-                    arg_types=[a if (isinstance(a, AnyType) or not other_unit) else CompoundType(other_unit, a) for a in member.arg_types]
+                    bound_args=make_list_with_unit_optional(base_unit, member.bound_args),
+                    arg_types=make_list_with_unit(other_unit, member.arg_types)
                 )
-            else:
+            elif base_unit:
                 # Adjust return type to base, finish
+                proper_ret_type = get_proper_type(member.ret_type)
                 return member.copy_modified(
                     # if you've reached Any, just stay at Any no units
-                    ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
+                    ret_type=proper_ret_type if isinstance(proper_ret_type, AnyType) or proper_ret_type is None else CompoundType(
                         base_unit,
-                        member.ret_type,
+                        proper_ret_type,
                     ),
-                    bound_args=[a if (isinstance(a, AnyType) or not base_unit) else CompoundType(base_unit, a) for a in
-                                member.bound_args],
+                    bound_args=make_list_with_unit_optional(base_unit,member.bound_args),
                 )
+            else:
+                return member
         else:
             # Everything is based on base_type or error
             if not base_unit:
                 return member
             else:
+                proper_ret_type = get_proper_type(member.ret_type)
                 # if you've reached Any, just stay at Any no units
                 return member.copy_modified(
-                    ret_type=member.ret_type if isinstance(member.ret_type, AnyType) else CompoundType(
+                    ret_type=member.ret_type if isinstance(proper_ret_type, AnyType) or proper_ret_type is None else CompoundType(
                         base_unit,
-                        member.ret_type
+                        proper_ret_type
                     ),
-                    bound_args=[a if (isinstance(a, AnyType) or not base_unit) else CompoundType(base_unit, a) for a in
-                                member.bound_args],
-                    arg_types=[a if isinstance(a, AnyType) else CompoundType(base_unit, a) for a in member.arg_types]
+                    bound_args=make_list_with_unit_optional(base_unit,member.bound_args),
+                    arg_types=make_list_with_unit(base_unit, member.arg_types)
                 )
 
     def check_op_reversible(
@@ -4157,9 +4187,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 )
                 if w.has_new_errors():
                     return None
-                elif base_unit or other_unit: #units are involved
-                    if isinstance(member,FunctionLike):
-                        return self.unit_modify(member,op_name,base_type,base_unit,other_unit,other_type,context)
+                elif base_unit or other_unit: # units are involved
+                    proper_member = get_proper_type(member)
+                    if isinstance(proper_member,FunctionLike):
+                        proper_base = get_proper_type(base_type)
+                        proper_other = get_proper_type(other_type)
+                        return self.unit_modify(proper_member,op_name,proper_base,base_unit,other_unit,proper_other,context)
                     else:
                         assert False, type(member)
                 else:
@@ -6566,8 +6599,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             return t, None
 
 
-    def make_computed_type(self, op_name: str, left_type: ProperType, right_type: ProperType,
-                            exponent_type: Type | None, context: Context) -> Type | None:
+    def make_computed_type(self, op_name: str, left_type: ProperType | None, right_type: ProperType | None,
+                            exponent_type: Type | None, context: Context) -> ProperType | None:
         def get_k() -> int | None:
             assert isinstance(context, OpExpr)
             k_in = context.left if not left_type else context.right
@@ -6576,8 +6609,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 return val
             return ExpressionChecker.literal_value_from_type(exponent_type)
 
-
-        if not left_type:
+        if right_type and not left_type:
             if op_name == '__pow__': # k^Sec?
                 assert False # is this a thing
             elif op_name == '__rpow__': # Sec^k
@@ -6596,7 +6628,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                     '/'
                 )
             else: return right_type
-        elif not right_type:
+        elif left_type and not right_type:
             if op_name == '__pow__': #Sec^k
                 k = get_k()
                 if k is None:
@@ -6616,6 +6648,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 )
             else: return left_type
         else: # do the op
+            assert right_type and left_type
             if op_name in operators.op_methods_to_symbols:
                 # Op is not reverse
                 op = operators.op_methods_to_symbols[op_name]
