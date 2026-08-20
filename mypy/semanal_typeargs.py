@@ -145,7 +145,8 @@ class TypeArgumentAnalyzer(MixedTraverserVisitor):
         # self.manager.modules['src.SUnit1.SIUnit'].names['SIUnit'].node
         from mypy.sipy import get_base_type
         base_info = get_base_type(self.manager.modules)
-        _, is_invalid = self.validate_args(base_name, (t.numeric_type,), base_info.type_vars, t)
+        if base_info is None: return # TODO: is this the right error situation
+        _, is_invalid = self.validate_args(base_name, (t.numeric_type,), base_info.defn.type_vars, t)
         if is_invalid:
             t.args = tuple(erased_vars([], TypeOfAny.from_error))
 
@@ -213,12 +214,14 @@ class TypeArgumentAnalyzer(MixedTraverserVisitor):
                     type(upper_bound) is Instance
                     and upper_bound.type.fullname == "builtins.object"
                 )
-                if hasattr(upper_bound, 'type') and upper_bound.type.fullname == "numpy.generic" and is_sipy_base(arg):
-                    if isinstance(arg,CompoundType):
-                        arg = arg.numeric_type
+                if (hasattr(upper_bound, 'type')
+                    and upper_bound.type.fullname == "numpy.generic"
+                    and is_sipy_base(proper_arg := get_proper_type(arg))):
+                    if isinstance(proper_arg,CompoundType):
+                        arg = proper_arg.numeric_type
                     else:
-                        assert isinstance(arg, Instance), str(arg)
-                        arg = arg.args[0]
+                        assert isinstance(proper_arg, Instance), str(proper_arg)
+                        arg = proper_arg.args[0]
                 if not object_upper_bound and not is_subtype(arg, upper_bound):
                     if self.in_type_alias_expr and isinstance(arg, TypeVarType):
                         # Type aliases are allowed to use unconstrained type variables

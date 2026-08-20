@@ -1057,11 +1057,12 @@ class ComputedType(ProperType):
 class CompoundType(ProperType):
     """Represents an SI type sliced with a numeric type"""
 
-    __slots__ = ("base_type","numeric_type","type")
+    __slots__ = ("base_type","numeric_type","type", "args")
 
     base_type: ProperType
     numeric_type: ProperType
     type: mypy.nodes.TypeInfo
+    args: Sequence[Type]
 
     def __init__(
         self,
@@ -1080,6 +1081,7 @@ class CompoundType(ProperType):
             assert len(self.base_type.args) <= 1, str(self.base_type)
             self.base_type.args = ()
         self.type = mypy.nodes.TypeInfo(None,mypy.nodes.ClassDef('',None),None)
+        self.args = []
 
     def accept(self, visitor: TypeVisitor[T]) -> T:
         return visitor.visit_compound_type(self)

@@ -3780,7 +3780,7 @@ class SemanticAnalyzer(
                 return
             proper_analyzed = get_proper_type(analyzed)
             if isinstance(proper_analyzed, Instance):
-                if is_sipy_base(analyzed):
+                if is_sipy_base(proper_analyzed):
                     # TODO: error if no numeric base
                     numeric_base = get_proper_type(proper_analyzed.args[0])
                     # replace with compound type

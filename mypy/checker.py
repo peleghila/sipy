@@ -4578,18 +4578,22 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
                 for item in proper_method_type.items:
                     assert len(item.arg_types) == 2
                     assert len(item.bound_args) == 1
+                    proper_last_arg = get_proper_type(item.arg_types[-1])
+                    proper_bound_arg = get_proper_type(item.bound_args[0])
                     new_items.append(item.copy_modified(
-                        arg_types=item.arg_types[:-1] + [CompoundType(reserved_units,item.arg_types[-1],reserved_units.line,reserved_units.column)],
-                        bound_args=[CompoundType(reserved_units,item.bound_args[0],item.line,item.column)]
+                        arg_types=item.arg_types[:-1] + [CompoundType(reserved_units,proper_last_arg,reserved_units.line,reserved_units.column)],
+                        bound_args=[CompoundType(reserved_units,proper_bound_arg,item.line,item.column)] if (proper_bound_arg is not None) else list(item.bound_args)
                     ))
                 method_type = Overloaded(new_items)
             else:
                 assert isinstance(proper_method_type, CallableType)
                 assert len(proper_method_type.arg_types) == 2
                 assert len(proper_method_type.bound_args) == 1
+                proper_last_arg = get_proper_type(proper_method_type.arg_types[-1])
+                proper_bound_arg = get_proper_type(proper_method_type.bound_args[0])
                 method_type = proper_method_type.copy_modified(
-                    arg_types=proper_method_type.arg_types[:-1] + [CompoundType(reserved_units,item.arg_types[-1],reserved_units.line,reserved_units.column)],
-                    bound_args=[CompoundType(reserved_units,proper_method_type.bound_args[0],proper_method_type.line,proper_method_type.column)]
+                    arg_types=proper_method_type.arg_types[:-1] + [CompoundType(reserved_units,proper_last_arg,reserved_units.line,reserved_units.column)],
+                    bound_args=[CompoundType(reserved_units,proper_bound_arg,proper_method_type.line,proper_method_type.column)] if (proper_bound_arg is not None) else list(item.bound_args)
                 )
             # reconstruct basetype
             basetype = CompoundType(reserved_units,basetype,basetype.line,basetype.column)

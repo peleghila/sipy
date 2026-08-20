@@ -148,11 +148,11 @@ class TypeVisitor(Generic[T]):
         pass
 
     @abstractmethod
-    def visit_compound_type(self, t: CompoundType):
+    def visit_compound_type(self, t: CompoundType) -> T:
         raise NotImplementedError()
 
     @abstractmethod
-    def visit_computed_type(self, t: ComputedType):
+    def visit_computed_type(self, t: ComputedType) -> T:
         raise NotImplementedError()
 
 

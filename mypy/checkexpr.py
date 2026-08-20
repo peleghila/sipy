@@ -1570,6 +1570,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                           and is_funcdef_sipy_dtype(a[1].callee.node), enumerate(e.args)), (-1,None))[0]
             if dtype_idx > -1:
                 dtype_call = e.args[dtype_idx]
+                assert isinstance(dtype_call,CallExpr)
                 if len(dtype_call.args) != 1 or not isinstance(dtype_call.args[0],IndexExpr):
                     reserved_units = self.msg.dtype_bad_param(dtype_call)
                 else:
@@ -1585,9 +1586,11 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         else:
                             reserved_units = Instance(reserved_units.node,())
                     elif isinstance(reserved_units, OpExpr):
-                        reserved_units = self.computed_type_if_sipy(reserved_units,None, e)
-                        if not reserved_units or isinstance(reserved_units, AnyType):
+                        computed_type = self.computed_type_if_sipy(reserved_units,None, e)
+                        if not computed_type or isinstance(computed_type, AnyType):
                             reserved_units = self.msg.dtype_bad_param(dtype_call)
+                        else:
+                            reserved_units = computed_type
                     # leave arg as just numeric type
                     if reserved_units and not isinstance(reserved_units,AnyType):
                         args[dtype_idx] = dtype_call.args[0].index
@@ -1611,7 +1614,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         math_pow_unit = ComputedType(base_unit, k, '**')
                         callee_type = callee_type.copy_modified(
                             arg_types=[
-                                CompoundType(base_unit, callee_type.arg_types[0]),
+                                CompoundType(base_unit, get_proper_type(callee_type.arg_types[0])),
                                 callee_type.arg_types[1],
                             ],
                         )
@@ -4080,7 +4083,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             else:
                 a_ = get_proper_type(a)
                 if isinstance(a_, AnyType):
-                    return a_
+                    return a
                 else:
                     return CompoundType(unit, a_)
 
@@ -6585,7 +6588,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
     @staticmethod
     def split_unit_type(t: Type) -> tuple[Type, ProperType | None]:
         """If t carries an SI unit, split it into (plain type, unit); else (t, None)."""
-        if not isinstance(t, ProperType):
+        if not isinstance(t, ProperType): #TODO: should maybe be getpropertype
             return t, None
         if isinstance(t, CompoundType):
             return t.numeric_type, t.base_type
