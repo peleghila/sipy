@@ -2455,8 +2455,11 @@ class MessageBuilder:
             code=codes.VALID_TYPE,
         )
 
-    def not_sipy_type_ctor(self, left: Type, right: Type, op: str, context: Context) -> Type:
-        name = f'"{format_type_bare(left,self.options)}{op}{format_type_bare(right,self.options)}"'
+    def not_sipy_type_ctor(self, left: Type | int, right: Type | int, op: str, context: Context) -> AnyType:
+        name = f'"{
+            format_type_bare(left,self.options) if not isinstance(left, int) else left
+        }{op}{
+            format_type_bare(right,self.options) if not isinstance(right, int) else right}"'
         self.fail(
             f"Operation {name} is a bad unit type constructor",
             context,
@@ -2464,7 +2467,7 @@ class MessageBuilder:
         )
         return AnyType(TypeOfAny.from_error)
 
-    def dtype_bad_param(self, context: Context):
+    def dtype_bad_param(self, context: Context) -> None:
         self.fail(
             f"Argument to dtype must be a unit type",
             context,

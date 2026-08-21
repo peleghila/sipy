@@ -314,3 +314,11 @@ y[0] = y0 # E: No overload variant of "__setitem__" of "ndarray" matches argumen
 [case testDtypeCompoundUnit]
 
 [case testDtypeSimpleUnit]
+
+[case testBadUnitConstructor]
+# flags: --python-version 3.10
+
+x = (dict**2)(6) # E: Operation  "Type[Dict[Any, Any]]**2" is a bad unit type constructor
+
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]

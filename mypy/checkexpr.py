@@ -497,9 +497,9 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             get_proper_type(base.node.target), TypedDictType
         )
 
-    def computed_type_if_sipy(self, o: OpExpr, type_context: Type, error_ctx: Context) -> ComputedType | AnyType | None:
+    def computed_type_if_sipy(self, o: OpExpr, type_context: Type | None, error_ctx: Context) -> ComputedType | AnyType | None:
 
-        left = None
+        left: Optional[ProperType | int] = None
         if isinstance(o.left, NameExpr):
             if not isinstance(o.left.node,TypeInfo) or not is_info_sipy_base(o.left.node):
                 left = None
@@ -515,7 +515,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         else:
             left = None
 
-        right = None
+        right: Optional[ProperType | int] = None
         if isinstance(o.right, NameExpr):
             if not isinstance(o.right.node,TypeInfo) or not is_info_sipy_base(o.right.node):
                 right = None
@@ -534,10 +534,10 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             return None
         if bool(left) ^ bool(right):
             return self.msg.not_sipy_type_ctor(
-                left or get_proper_type(
+                left if left is not None else get_proper_type(
                     self.accept(o.left, type_context, always_allow_any=True, is_callee=True)
                 ),
-                right or get_proper_type(
+                right if right is not None else get_proper_type(
                     self.accept(o.right, type_context, always_allow_any=True, is_callee=True)
                 ), o.op, error_ctx)
         if left and right and o.op not in {'*', '**', '/'}:
@@ -1563,10 +1563,12 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             return self.check_union_call_expr(e, object_type, member)
         args = e.args
         dtype_idx = -1
-        reserved_units = None
+        reserved_units : Optional[ProperType] = None
         if callable_name and callable_name.startswith('numpy.'):
             dtype_idx = next(filter(
                    lambda a: isinstance(a[1],CallExpr)
+                          and isinstance(a[1].callee,NameExpr)
+                          and isinstance(a[1].callee.node,FuncDef)
                           and is_funcdef_sipy_dtype(a[1].callee.node), enumerate(e.args)), (-1,None))[0]
             if dtype_idx > -1:
                 dtype_call = e.args[dtype_idx]
@@ -1574,19 +1576,20 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 if len(dtype_call.args) != 1 or not isinstance(dtype_call.args[0],IndexExpr):
                     reserved_units = self.msg.dtype_bad_param(dtype_call)
                 else:
-                    reserved_units = dtype_call.args[0].base
+                    units_name = dtype_call.args[0].base
                     # turn reserved units into type
-                    if isinstance(reserved_units,NameExpr):
-                        if not reserved_units.node or (not isinstance(reserved_units.node,TypeInfo) and not isinstance(reserved_units.node, TypeAlias)):
+                    if isinstance(units_name,NameExpr):
+                        if not units_name.node or (not isinstance(units_name.node,TypeInfo) and not isinstance(units_name.node, TypeAlias)):
                             assert False, "TODO: make error message"
-                        elif isinstance(reserved_units.node,TypeInfo) and not is_info_sipy_base(reserved_units.node):
+                        elif isinstance(units_name.node,TypeInfo) and not is_info_sipy_base(units_name.node):
                             reserved_units = self.msg.dtype_bad_param(dtype_call)
-                        elif isinstance(reserved_units.node, TypeAlias) and not is_sipy_base(reserved_units.node.target):
+                        elif isinstance(units_name.node, TypeAlias) and not is_sipy_base(get_proper_type(units_name.node.target)):
                             reserved_units = self.msg.dtype_bad_param(dtype_call)
                         else:
-                            reserved_units = Instance(reserved_units.node,())
-                    elif isinstance(reserved_units, OpExpr):
-                        computed_type = self.computed_type_if_sipy(reserved_units,None, e)
+                            assert isinstance(units_name.node,TypeInfo)
+                            reserved_units = Instance(units_name.node,())
+                    elif isinstance(units_name, OpExpr):
+                        computed_type = self.computed_type_if_sipy(units_name,None, e)
                         if not computed_type or isinstance(computed_type, AnyType):
                             reserved_units = self.msg.dtype_bad_param(dtype_call)
                         else:
@@ -1596,7 +1599,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         args[dtype_idx] = dtype_call.args[0].index
 
         math_pow_unit = None
-        if callable_name == 'math.pow' and len(args) == 2 and isinstance(callee_type, CallableType):
+        proper_callee_type = get_proper_type(callee_type)
+        if callable_name == 'math.pow' and len(args) == 2 and isinstance(proper_callee_type, CallableType):
             # mimic __pow__'s unit propagation (see unit_modify/make_computed_type) for the
             # plain-function-call form math.pow(x, k)
             with self.msg.filter_errors() as w:
@@ -1612,10 +1616,10 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                             k = ExpressionChecker.literal_value_from_type(arg1_type)
                     if k is not None:
                         math_pow_unit = ComputedType(base_unit, k, '**')
-                        callee_type = callee_type.copy_modified(
+                        callee_type = proper_callee_type.copy_modified(
                             arg_types=[
-                                CompoundType(base_unit, get_proper_type(callee_type.arg_types[0])),
-                                callee_type.arg_types[1],
+                                CompoundType(base_unit, get_proper_type(proper_callee_type.arg_types[0])),
+                                proper_callee_type.arg_types[1],
                             ],
                         )
                     else:
