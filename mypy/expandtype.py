@@ -510,7 +510,7 @@ class ExpandTypeVisitor(TrivialSyntheticTypeTranslator):
         return t.copy_modified(args=args)
 
     def visit_compound_type(self, t: CompoundType) -> Type:
-        numeric = t.numeric_type.accept(self)
+        numeric = get_proper_type(t.numeric_type.accept(self))
         return CompoundType(
             t.base_type,
             numeric,
