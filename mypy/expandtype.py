@@ -509,7 +509,7 @@ class ExpandTypeVisitor(TrivialSyntheticTypeTranslator):
         # TODO: normalize if target is Tuple, and args are [*tuple[X, ...]]?
         return t.copy_modified(args=args)
 
-    def visit_compound_type(self, t: CompoundType):
+    def visit_compound_type(self, t: CompoundType) -> Type:
         numeric = t.numeric_type.accept(self)
         return CompoundType(
             t.base_type,

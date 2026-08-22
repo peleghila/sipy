@@ -604,10 +604,10 @@ class BoolTypeQuery(SyntheticTypeVisitor[bool]):
             return self.query_types(t.args)
         return get_proper_type(t).accept(self)
 
-    def visit_compound_type(self, t: CompoundType):
+    def visit_compound_type(self, t: CompoundType) -> bool:
         return self.query_types([t.numeric_type,t.base_type])
 
-    def visit_computed_type(self, t: ComputedType):
+    def visit_computed_type(self, t: ComputedType) -> bool:
         return self.query_types([x for x in [t.left, t.right] if isinstance(x, Type)])
 
     def query_types(self, types: list[Type] | tuple[Type, ...]) -> bool:

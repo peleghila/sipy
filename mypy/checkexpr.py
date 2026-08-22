@@ -532,7 +532,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             right = None
         if not left and not right:
             return None
-        if bool(left) ^ bool(right):
+        if (left is not None) ^ (right is not None):
             return self.msg.not_sipy_type_ctor(
                 left if left is not None else get_proper_type(
                     self.accept(o.left, type_context, always_allow_any=True, is_callee=True)
@@ -540,10 +540,11 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 right if right is not None else get_proper_type(
                     self.accept(o.right, type_context, always_allow_any=True, is_callee=True)
                 ), o.op, error_ctx)
-        if left and right and o.op not in {'*', '**', '/'}:
+        if left is not None and right is not None and o.op not in {'*', '**', '/'}:
             return self.msg.not_sipy_type_ctor(left, right, o.op, error_ctx)
         if isinstance(left, AnyType): return left
         if isinstance(right, AnyType): return right
+        assert left is not None and right is not None
         return ComputedType(left, right, o.op, o.line, o.column)
 
     def visit_call_expr_inner(self, e: CallExpr, allow_none_return: bool = False) -> Type:
@@ -627,27 +628,34 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         if isinstance(e.callee, OpExpr):
             # treat it like an annotation type
             op_type = self.computed_type_if_sipy(e.callee,type_context, e)
-            if not op_type or isinstance(op_type, AnyType):
-                # fallback to orig behavior
+            if op_type is None:
+                # Not an SI-unit computation at all; fallback to orig behavior.
                 callee_type = get_proper_type(
                     self.accept(e.callee, type_context, always_allow_any=True, is_callee=True)
                 )
+            elif isinstance(op_type, AnyType):
+                # An SI-unit-specific error was already reported by
+                # computed_type_if_sipy; don't re-check e.callee and double-report.
+                callee_type = op_type
             else:
                 # get sipy base
                 from mypy.sipy import get_base_type
                 sipy_base = get_base_type(self.modules)
-                numeric_base = sipy_base.defn.type_vars[0]
-                computed_op = CompoundType(op_type,numeric_base)
-                callee_type = CallableType(
-                    [numeric_base],
-                    [ArgKind.ARG_POS],
-                    [numeric_base.name],
-                    computed_op,
-                    sipy_base.declared_metaclass,
-                    name = str(op_type),
-                    bound_args=[computed_op],
-                    variables=[numeric_base]
-                )
+                if sipy_base is not None and sipy_base.declared_metaclass is not None:
+                    numeric_base = sipy_base.defn.type_vars[0]
+                    computed_op = CompoundType(op_type,numeric_base)
+                    callee_type = CallableType(
+                        [numeric_base],
+                        [ArgKind.ARG_POS],
+                        [numeric_base.name],
+                        computed_op,
+                        sipy_base.declared_metaclass,
+                        name = str(op_type),
+                        bound_args=[computed_op],
+                        variables=[numeric_base]
+                    )
+                else:
+                    pass # TODO: what to do? error?
         else:
             callee_type = get_proper_type(
                 self.accept(e.callee, type_context, always_allow_any=True, is_callee=True)
@@ -711,11 +719,11 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             self.chk.binder.unreachable()
         if isinstance(ret_type, Instance):
             if is_sipy_base(ret_type):
-                numeric_base = ret_type.args[0]
+                new_numeric_base = get_proper_type(ret_type.args[0])
                 # replace with compound type
                 ret_type = CompoundType(
                     ret_type,
-                    numeric_base,
+                    new_numeric_base,
                     ret_type.line,
                     ret_type.column
                 )
@@ -1574,7 +1582,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                 dtype_call = e.args[dtype_idx]
                 assert isinstance(dtype_call,CallExpr)
                 if len(dtype_call.args) != 1 or not isinstance(dtype_call.args[0],IndexExpr):
-                    reserved_units = self.msg.dtype_bad_param(dtype_call)
+                    self.msg.dtype_bad_param(dtype_call)
                 else:
                     units_name = dtype_call.args[0].base
                     # turn reserved units into type
@@ -1582,16 +1590,16 @@ class ExpressionChecker(ExpressionVisitor[Type]):
                         if not units_name.node or (not isinstance(units_name.node,TypeInfo) and not isinstance(units_name.node, TypeAlias)):
                             assert False, "TODO: make error message"
                         elif isinstance(units_name.node,TypeInfo) and not is_info_sipy_base(units_name.node):
-                            reserved_units = self.msg.dtype_bad_param(dtype_call)
+                            self.msg.dtype_bad_param(dtype_call)
                         elif isinstance(units_name.node, TypeAlias) and not is_sipy_base(get_proper_type(units_name.node.target)):
-                            reserved_units = self.msg.dtype_bad_param(dtype_call)
+                            self.msg.dtype_bad_param(dtype_call)
                         else:
                             assert isinstance(units_name.node,TypeInfo)
                             reserved_units = Instance(units_name.node,())
                     elif isinstance(units_name, OpExpr):
                         computed_type = self.computed_type_if_sipy(units_name,None, e)
                         if not computed_type or isinstance(computed_type, AnyType):
-                            reserved_units = self.msg.dtype_bad_param(dtype_call)
+                            self.msg.dtype_bad_param(dtype_call)
                         else:
                             reserved_units = computed_type
                     # leave arg as just numeric type

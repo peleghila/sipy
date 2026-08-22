@@ -102,6 +102,8 @@ blah: M*M = 6 # E: Units must have a numeric type
 tsq1: M*M[int] = 8 # E: Invalid type comment or annotation \
             # N: Operations must be between unit types (did you forget parentheses?)
 q: (M**'str')[int] = 6 # E: Invalid type comment or annotation
+k: (2/M)[float] = 7 # E: Invalid type comment or annotation \
+            # N: Use 1/M instead
 
 
 [case testGoodAssignmentsAddSub]
@@ -317,8 +319,10 @@ y[0] = y0 # E: No overload variant of "__setitem__" of "ndarray" matches argumen
 
 [case testBadUnitConstructor]
 # flags: --python-version 3.10
+from src.SUnit1.SIUnit import M
 
-x = (dict**2)(6) # E: Operation  "Type[Dict[Any, Any]]**2" is a bad unit type constructor
+x = (dict**2)(6) # E: Operation "Type[Dict[Any, Any]]**2" is a bad unit type constructor
+y = (2/M)(7) # E: some error (should be 1)
 
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]

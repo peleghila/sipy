@@ -1059,9 +1059,14 @@ class CompoundType(ProperType):
 
     __slots__ = ("base_type","numeric_type","type", "args")
 
+    class FakeInfoNode(mypy.nodes.TypeInfo):
+        def __init__(self) -> None:
+            self.is_protocol = False
+            self.is_abstract = False
+
     base_type: ProperType
     numeric_type: ProperType
-    type: mypy.nodes.TypeInfo
+    type: FakeInfoNode
     args: Sequence[Type]
 
     def __init__(
@@ -1080,7 +1085,7 @@ class CompoundType(ProperType):
         if isinstance(self.base_type, Instance):
             assert len(self.base_type.args) <= 1, str(self.base_type)
             self.base_type.args = ()
-        self.type = mypy.nodes.TypeInfo(None,mypy.nodes.ClassDef('',None),None)
+        self.type = CompoundType.FakeInfoNode()
         self.args = []
 
     def accept(self, visitor: TypeVisitor[T]) -> T:
@@ -3619,10 +3624,10 @@ class TypeStrVisitor(SyntheticTypeVisitor[str]):
     def visit_unpack_type(self, t: UnpackType) -> str:
         return f"Unpack[{t.type.accept(self)}]"
 
-    def visit_computed_type(self, t: ComputedType):
+    def visit_computed_type(self, t: ComputedType) -> str:
         return f"Computed({t.left.accept(self) if isinstance(t.left,Type) else t.left}{t.op}{t.right.accept(self)  if isinstance(t.right,Type) else t.right})"
 
-    def visit_compound_type(self, t: CompoundType):
+    def visit_compound_type(self, t: CompoundType) -> str:
         return f"Compound({t.base_type.accept(self)}[{t.numeric_type.accept(self)}])"
 
     def list_str(self, a: Iterable[Type]) -> str:

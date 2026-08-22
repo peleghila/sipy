@@ -138,11 +138,11 @@ class EraseTypeVisitor(TypeVisitor[ProperType]):
     def visit_type_alias_type(self, t: TypeAliasType) -> ProperType:
         raise RuntimeError("Type aliases should be expanded before accepting this visitor")
 
-    def visit_computed_type(self, t: ComputedType):
+    def visit_computed_type(self, t: ComputedType) -> ProperType:
         # TODO: need to erase this at creation though
         assert False, "should always be under a compound type"
 
-    def visit_compound_type(self, t: CompoundType):
+    def visit_compound_type(self, t: CompoundType) -> ProperType:
         return t # this parametrization is crucial so not touching it
 
 
@@ -282,5 +282,5 @@ class LastKnownValueEraser(TypeTranslator):
             return UnionType.make_union(merged)
         return new
 
-    def visit_compound_type(self, t: CompoundType):
+    def visit_compound_type(self, t: CompoundType) -> Type:
         return t
