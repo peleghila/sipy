@@ -53,6 +53,7 @@ from mypy.nodes import Import, ImportAll, ImportBase, ImportFrom, MypyFile, Symb
 from mypy.partially_defined import PossiblyUndefinedVariableVisitor
 from mypy.semanal import SemanticAnalyzer
 from mypy.semanal_pass1 import SemanticAnalyzerPreAnalysis
+from mypy.sipy import base_type_module, load_unit_alias_rules
 from mypy.util import (
     DecodeError,
     decode_python_encoding,
@@ -2016,6 +2017,14 @@ class State:
 
     def is_fresh(self) -> bool:
         """Return whether the cache data for this file is fresh."""
+        if self.id == base_type_module:
+            # The sipy unit-definitions module declares global unit
+            # equivalences via `_aliases` (see mypy.sipy). Those don't live
+            # on any node, and so are not written to the cache, so reloading
+            # then requires re-analyzing the module, so we always treat it
+            # as stale. Only this module pays the cost: its *interface*
+            # is untouched, so dependents aren't rechecked along with it.
+            return False
         # NOTE: self.dependencies may differ from
         # self.meta.dependencies when a dependency is dropped due to
         # suppression by silent mode.  However when a suppressed
@@ -3431,6 +3440,11 @@ def process_stale_scc(graph: Graph, scc: list[str], manager: BuildManager) -> No
         typing_mod = graph["typing"].tree
         assert typing_mod, "The typing module was not parsed"
     mypy.semanal_main.semantic_analysis_for_scc(graph, scc, manager.errors)
+    if base_type_module in scc:
+        # The sipy unit-definitions module has just been analyzed, so its
+        # `_aliases` declarations (see mypy.semanal_sipy) are now known and
+        # can be loaded into the e-graph.
+        load_unit_alias_rules()
 
     # Track what modules aren't yet done so we can finish them as soon
     # as possible, saving memory.

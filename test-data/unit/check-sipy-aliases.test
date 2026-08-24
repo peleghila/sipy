@@ -1,0 +1,144 @@
+-- Tests for sipy's `_aliases` unit-equivalence special form (mypy.semanal_sipy).
+-- Each case defines its own [file src/SUnit1/SIUnit.py] so that different
+-- cases can exercise different `_aliases` content.
+
+[case testSipyUnitAliasAllowsEquivalence]
+from src.SUnit1.SIUnit import Sec, Hz
+a: (1/Sec)[float] = (1/Sec)(2.0)
+b: Hz[float] = a
+c: Hz[float] = Hz(3.0)
+d: (1/Sec)[float] = c
+[file src/SUnit1/SIUnit.py]
+import typing
+from typing import Generic, TypeVar
+NumericBase = TypeVar("NumericBase")
+class SIUnitType(type):
+    def __call__(self, value):
+        return value
+    def __invert__(self):
+        print(self)
+    def __mul__(self, other):
+        return SIUnit
+    def __pow__(self, power, modulo=None):
+        return SIUnit
+    def __truediv__(self, other):
+        return SIUnit
+class SIUnit(Generic[NumericBase],metaclass=SIUnitType):
+    def __mul__(self, other): pass
+    def __rmul__(self, other): pass
+    def __truediv__(self, other): pass
+    def __floordiv__(self, other): pass
+    def __rfloordiv__(self, other): pass
+    def __rtruediv__(self, other): pass
+    def __pow__(self, power, modulo=None): pass
+    def __add__(self, other): pass
+    def __sub__(self, other): pass
+    def __radd__(self, other): pass
+    def __rsub__(self, other): pass
+    def __mod__(self, other): pass
+    def __divmod__(self, other): pass
+    def __lshift__(self, other): pass
+    def __rshift__(self, other): pass
+    def __neg__(self): pass
+    def __pos__(self): pass
+    def __invert__(self): pass
+    def __abs__(self): pass
+    def __round__(self, n=None): pass
+    def __trunc__(self): pass
+    def __floor__(self): pass
+    def __ceil__(self): pass
+    def __int__(self): pass
+    def __float__(self): pass
+def dtype(unitType):
+    return typing.get_args(unitType)[0]
+class Length(SIUnit[NumericBase]):
+    pass
+class M(Length[NumericBase]):
+    def __init__(self, value: NumericBase):
+        ...
+class Time(SIUnit[NumericBase]):
+    pass
+class Sec(Time[NumericBase]):
+    def __init__(self, value: NumericBase):
+        ...
+class Hz(SIUnit[NumericBase]):
+    def __init__(self, value: NumericBase):
+        ...
+_aliases = [
+    (Hz, 1 / Sec),
+]
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+[case testSipyUnitAliasBadTarget]
+from src.SUnit1.SIUnit import Sec, Hz
+x: int
+[file src/SUnit1/SIUnit.py]
+import typing
+from typing import Generic, TypeVar
+NumericBase = TypeVar("NumericBase")
+class SIUnitType(type):
+    def __call__(self, value):
+        return value
+    def __invert__(self):
+        print(self)
+    def __mul__(self, other):
+        return SIUnit
+    def __pow__(self, power, modulo=None):
+        return SIUnit
+    def __truediv__(self, other):
+        return SIUnit
+class SIUnit(Generic[NumericBase],metaclass=SIUnitType):
+    def __mul__(self, other): pass
+    def __rmul__(self, other): pass
+    def __truediv__(self, other): pass
+    def __floordiv__(self, other): pass
+    def __rfloordiv__(self, other): pass
+    def __rtruediv__(self, other): pass
+    def __pow__(self, power, modulo=None): pass
+    def __add__(self, other): pass
+    def __sub__(self, other): pass
+    def __radd__(self, other): pass
+    def __rsub__(self, other): pass
+    def __mod__(self, other): pass
+    def __divmod__(self, other): pass
+    def __lshift__(self, other): pass
+    def __rshift__(self, other): pass
+    def __neg__(self): pass
+    def __pos__(self): pass
+    def __invert__(self): pass
+    def __abs__(self): pass
+    def __round__(self, n=None): pass
+    def __trunc__(self): pass
+    def __floor__(self): pass
+    def __ceil__(self): pass
+    def __int__(self): pass
+    def __float__(self): pass
+def dtype(unitType):
+    return typing.get_args(unitType)[0]
+class Length(SIUnit[NumericBase]):
+    pass
+class M(Length[NumericBase]):
+    def __init__(self, value: NumericBase):
+        ...
+class Time(SIUnit[NumericBase]):
+    pass
+class Sec(Time[NumericBase]):
+    def __init__(self, value: NumericBase):
+        ...
+class Hz(SIUnit[NumericBase]):
+    def __init__(self, value: NumericBase):
+        ...
+_aliases = [
+    (Hz, 1 / int),  # E: Second element of an `_aliases` entry must be a unit expression
+]
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
+-- No "declaring _aliases nowhere means Hz and 1/Sec are unrelated" case here:
+-- sipy's EgraphTypeCompare.egraph is a single process-wide e-graph that's
+-- never reset between builds (One Big Egraph), since unit math and aliasing
+-- are global, always-correct facts, not per-build/per-file equivalences.
+-- Whether such a case would see Hz and 1/Sec as equivalent depends on
+-- whatever else already ran in the same worker process, so it isn't a
+-- meaningful/deterministic thing to assert either way.

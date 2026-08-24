@@ -216,6 +216,7 @@ from mypy.scope import Scope
 from mypy.semanal_enum import EnumCallAnalyzer
 from mypy.semanal_namedtuple import NamedTupleAnalyzer
 from mypy.semanal_newtype import NewTypeAnalyzer
+from mypy.semanal_sipy import SipyAliasAnalyzer
 from mypy.semanal_shared import (
     ALLOW_INCOMPATIBLE_OVERRIDE,
     PRIORITY_FALLBACKS,
@@ -845,6 +846,7 @@ class SemanticAnalyzer(
             self.typed_dict_analyzer = TypedDictAnalyzer(options, self, self.msg)
             self.enum_call_analyzer = EnumCallAnalyzer(options, self)
             self.newtype_analyzer = NewTypeAnalyzer(options, self, self.msg)
+            self.sipy_alias_analyzer = SipyAliasAnalyzer(self)
 
             # Counter that keeps track of references to undefined things potentially caused by
             # incomplete namespaces.
@@ -3244,6 +3246,8 @@ class SemanticAnalyzer(
                 special_form = True
             elif self.analyze_enum_assign(s):
                 special_form = True
+        elif self.sipy_alias_analyzer.process_sipy_aliases_declaration(s, self.cur_mod_node):
+            special_form = True
 
         if special_form:
             self.record_special_form_lvalue(s)

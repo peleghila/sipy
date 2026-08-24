@@ -1,9 +1,10 @@
-from typing import List, Dict, Tuple
+from typing import ClassVar, Dict, List, Set, Tuple, cast
 
 from quiche.egraph import Subst
 
 import mypy.types
-from mypy.nodes import MypyFile, TypeInfo, FuncDef, TypeAlias, SymbolNode
+from mypy.nodes import AssignmentStmt, Expression, FuncDef, IntExpr, ListExpr, MypyFile, NameExpr, OpExpr, \
+    SymbolNode, TypeAlias, TypeInfo
 from mypy.type_visitor import T
 from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType, UnboundType, TypeVarType, \
     TypeAliasType, UninhabitedType, UnionType, Type, NoneType, CallableType, TupleType, TypeType, LiteralType, \
@@ -119,9 +120,90 @@ def is_sipy_base(candidate: ProperType) -> bool:
     return ret
 
 
+class UnitExprError(Exception):
+    """Raised by interpret_unit_expr when an OpExpr looks like it's trying to be
+    an SI-unit computation but has an invalid operand or operator. Callers
+    report their own diagnostic using left/right/op_expr, since what counts as
+    an appropriate fallback/error message differs by call site."""
+
+    def __init__(self, left: "ProperType | int | None", right: "ProperType | int | None", op_expr: OpExpr) -> None:
+        self.left = left
+        self.right = right
+        self.op_expr = op_expr
+
+
+def interpret_unit_expr(o: Expression) -> "ProperType | None":
+    """Pure syntactic interpretation of an SI-unit computation such as
+    `M/Sec**2` or `1/Sec`, mirroring the arithmetic already legal in unit-type
+    annotation position. Only needs semantic analysis (name binding), not full
+    type inference. Returns None if `o` isn't unit-computation-shaped at all.
+    Raises UnitExprError if it looks like one but has an invalid operand or
+    operator (exactly one side resolves, or the operator isn't */**//)."""
+    if isinstance(o, NameExpr):
+        if isinstance(o.node, TypeInfo) and is_info_sipy_base(o.node):
+            return Instance(o.node, ())
+        return None
+    if not isinstance(o, OpExpr):
+        return None
+
+    left: "ProperType | int | None"
+    if isinstance(o.left, IntExpr):
+        left = o.left.value if (o.left.value == 1 and o.op == '/') else None
+    else:
+        left = interpret_unit_expr(o.left)
+
+    from mypy.checkexpr import ExpressionChecker
+    right: "ProperType | int | None"
+    if ExpressionChecker.is_numeric_literal_expr(o.right):
+        right = ExpressionChecker.get_numeric_literal_value(o.right) if o.op == '**' else None
+    else:
+        right = interpret_unit_expr(o.right)
+
+    if left is None and right is None:
+        return None
+    if (left is None) != (right is None):
+        raise UnitExprError(left, right, o)
+    if o.op not in {'*', '**', '/'}:
+        raise UnitExprError(left, right, o)
+    # Both are non-None here: the checks above returned when neither resolved
+    # and raised when exactly one did.
+    assert left is not None and right is not None
+    return ComputedType(left, right, o.op, o.line, o.column)
+
+
+def is_sipy_aliases_assignment(s: AssignmentStmt, cur_mod_id: str) -> bool:
+    """Structural recognition of sipy's `_aliases` special form: a bare
+    module-level `_aliases = [...]` assignment in the sipy unit-definitions
+    module. Purely syntactic -- needs only `s` and the current module's
+    fullname, no semantic-analysis-time state -- so both semanal_sipy.py
+    (during semantic analysis, to recognize and interpret the form) and
+    checker.py (to skip normal RHS checking of it, since its arithmetic
+    syntax like `1 / Sec` isn't meant to be ordinary checkable Python) just
+    call this directly, rather than needing a stored flag on the shared
+    AssignmentStmt node -- which is instantiated for every assignment
+    statement in every file mypy ever checks, not just sipy's."""
+    return (
+        cur_mod_id == base_type_module
+        and len(s.lvalues) == 1
+        and isinstance(s.lvalues[0], NameExpr)
+        and s.lvalues[0].name == "_aliases"
+        and isinstance(s.rvalue, ListExpr)
+    )
+
+
+# The unit equivalences declared by the sipy unit-definitions module's
+# `_aliases` list (e.g. Hz == 1/Sec). Recorded here during semantic analysis of
+# that module (see mypy.semanal_sipy) and turned into e-graph rewrite rules by
+# load_unit_alias_rules() below. There is exactly one such module per process,
+# so this lives next to the e-graph it feeds rather than being attached to a
+# node -- in particular not to MypyFile, which is instantiated for every module
+# mypy ever reads, none of which but this one would ever have a value here.
+unit_aliases: "List[Tuple[Instance, ProperType]]" = []
+
+
 class EgraphTypeCompare:
     @staticmethod
-    def _to_node(t: ComputedType) -> ExprNode:
+    def _to_node(t: ComputedType | Instance) -> ExprNode:
         if isinstance(t, Instance):
             return ExprNode(t.type.name, ())
 
@@ -142,9 +224,11 @@ class EgraphTypeCompare:
         return ExprNode(t.op,(l,r))
 
     egraph = EGraph()
+    alias_rules: List[Rule] = []
+
     @staticmethod
     def rule_apply() -> None:
-        Rule.apply_rules(EgraphTypeCompare.egraph_rules, EgraphTypeCompare.egraph)
+        Rule.apply_rules(EgraphTypeCompare.egraph_rules + EgraphTypeCompare.alias_rules, EgraphTypeCompare.egraph)
 
 
     class IntSuccessorRule(ConditionalRule):
@@ -212,6 +296,71 @@ class EgraphTypeCompare:
             EgraphTypeCompare.rule_apply()
             is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
         return is_eq
+
+
+class UnitExprTree(ExprTree):
+    """An ExprTree for ground unit-alias rules. Plain ExprTree treats *any*
+    non-int leaf as a free pattern variable during e-graph matching (see
+    quiche's ExprTree.is_pattern_symbol), which is correct for the generic
+    arithmetic identities in egraph_rules (x, y, z, n are meant to unify with
+    anything) but wrong for unit-alias rules, where every leaf name (e.g.
+    "Hz", "Sec") is a concrete constant, not a variable -- left as plain
+    ExprTree, a rule like Hz -> 1/Sec would spuriously match any other named
+    leaf ("Sec", "M", ...) and corrupt the graph. literal_names excludes the
+    known alias-related names from ever being treated as pattern variables.
+    """
+
+    literal_names: ClassVar[Set[str]] = set()
+
+    def __init__(self, root: ExprNode) -> None:
+        super().__init__(root)
+        # ExprTree.__init__ hardcodes plain ExprTree for children, so redo it
+        # here with UnitExprTree -- otherwise only the root node would get the
+        # literal_names override and every nested leaf (e.g. "Sec" inside
+        # "1/Sec") would fall back to plain ExprTree's "any non-int leaf is a
+        # pattern variable" behavior, corrupting the graph exactly as
+        # described above.
+        self._children = [UnitExprTree(arg) for arg in root.args]
+
+    def is_pattern_symbol(self) -> bool:
+        return super().is_pattern_symbol() and self.value() not in UnitExprTree.literal_names
+
+
+def collect_leaf_names(node: ExprNode) -> Set[str]:
+    if not node.args:
+        return {node.key} if isinstance(node.key, str) else set()
+    names: Set[str] = set()
+    for child in node.args:
+        names |= collect_leaf_names(child)
+    return names
+
+
+def load_unit_alias_rules() -> None:
+    """Turn the `unit_aliases` recorded during semantic analysis of the sipy
+    unit-definitions module into bidirectional e-graph rewrite rules.
+
+    Called exactly once, from build.py, right after that module has been
+    processed -- the same guarded special-casing 'builtins' and 'typing' get
+    there. Because there is only ever the one declaring module, this is a
+    plain read-and-set rather than something that accumulates or has to
+    tolerate being called speculatively before the data exists.
+
+    Note this only ever adds knowledge to the e-graph: EgraphTypeCompare's
+    e-graph is never reset between builds (One Big Egraph), since unit math
+    and aliasing are global, always-correct facts rather than equivalences
+    scoped to one build or file."""
+    rules: List[Rule] = []
+    literal_names: Set[str] = set()
+    for leaf_instance, target in unit_aliases:
+        lhs_node = EgraphTypeCompare._to_node(leaf_instance)
+        rhs_node = EgraphTypeCompare._to_node(target)
+        literal_names |= collect_leaf_names(lhs_node) | collect_leaf_names(rhs_node)
+        lhs = UnitExprTree(lhs_node)
+        rhs = UnitExprTree(rhs_node)
+        # bidirectional, matching the existing x**2/x*x convention already in egraph_rules
+        rules += [Rule(lhs, rhs), Rule(rhs, lhs)]
+    UnitExprTree.literal_names = literal_names
+    EgraphTypeCompare.alias_rules = rules
 
 
 def deunit_instance(t: ProperType) -> Tuple[ProperType, List[ProperType]]:

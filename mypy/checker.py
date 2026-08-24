@@ -145,6 +145,7 @@ from mypy.scope import Scope
 from mypy.semanal import is_trivial_body, refers_to_fullname, set_callable_name
 from mypy.semanal_enum import ENUM_BASES, ENUM_SPECIAL_PROPS
 from mypy.sharedparse import BINARY_MAGIC_METHODS
+from mypy.sipy import is_sipy_aliases_assignment
 from mypy.state import state
 from mypy.subtypes import (
     find_member,
@@ -2996,7 +2997,17 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         # Avoid type checking type aliases in stubs to avoid false
         # positives about modern type syntax available in stubs such
         # as X | Y.
-        if not (s.is_alias_def and self.is_stub):
+        #
+        # sipy's `_aliases` special form (see mypy.semanal_sipy) is skipped
+        # unconditionally: its rvalue uses unit-computation arithmetic syntax
+        # (e.g. `1 / Sec`) that semantic analysis already interpreted and
+        # validated directly, not ordinary checkable Python -- normal operator
+        # checking has no reason to understand it. Recognizing it is purely
+        # structural (module identity + lvalue/rvalue shape), so it's
+        # re-derived here rather than cached on the shared AssignmentStmt node.
+        if not (s.is_alias_def and self.is_stub) and not is_sipy_aliases_assignment(
+            s, self.tree.fullname
+        ):
             with self.enter_final_context(s.is_final_def):
                 self.check_assignment(s.lvalues[-1], s.rvalue, s.type is None, s.new_syntax)
 

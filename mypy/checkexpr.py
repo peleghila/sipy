@@ -498,54 +498,24 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         )
 
     def computed_type_if_sipy(self, o: OpExpr, type_context: Type | None, error_ctx: Context) -> ComputedType | AnyType | None:
-
-        left: Optional[ProperType | int] = None
-        if isinstance(o.left, NameExpr):
-            if not isinstance(o.left.node,TypeInfo) or not is_info_sipy_base(o.left.node):
-                left = None
-            else:
-                left = Instance(o.left.node, ())
-        elif isinstance(o.left, OpExpr):
-            left = self.computed_type_if_sipy(o.left, type_context, error_ctx)
-        elif isinstance(o.left, IntExpr):
-            if o.left.value != 1 or o.op != '/':
-                left = None
-            else:
-                left = o.left.value
-        else:
-            left = None
-
-        right: Optional[ProperType | int] = None
-        if isinstance(o.right, NameExpr):
-            if not isinstance(o.right.node,TypeInfo) or not is_info_sipy_base(o.right.node):
-                right = None
-            else:
-                right = Instance(o.right.node, ())
-        elif isinstance(o.right, OpExpr):
-            right = self.computed_type_if_sipy(o.right, type_context, error_ctx)
-        elif ExpressionChecker.is_numeric_literal_expr(o.right):  # func in case of -2 (unaryop)
-            if o.op != '**':
-                right = None
-            else:
-                right = ExpressionChecker.get_numeric_literal_value(o.right)
-        else:
-            right = None
-        if not left and not right:
-            return None
-        if (left is not None) ^ (right is not None):
-            return self.msg.not_sipy_type_ctor(
-                left if left is not None else get_proper_type(
-                    self.accept(o.left, type_context, always_allow_any=True, is_callee=True)
-                ),
-                right if right is not None else get_proper_type(
-                    self.accept(o.right, type_context, always_allow_any=True, is_callee=True)
-                ), o.op, error_ctx)
-        if left is not None and right is not None and o.op not in {'*', '**', '/'}:
-            return self.msg.not_sipy_type_ctor(left, right, o.op, error_ctx)
-        if isinstance(left, AnyType): return left
-        if isinstance(right, AnyType): return right
-        assert left is not None and right is not None
-        return ComputedType(left, right, o.op, o.line, o.column)
+        # Pure syntax interpretation lives in mypy.sipy.interpret_unit_expr,
+        # shared with the semantic-analysis-level `_aliases` special form; this
+        # wrapper just supplies this call site's own fallback/error reporting.
+        from mypy.sipy import interpret_unit_expr, UnitExprError
+        try:
+            result = interpret_unit_expr(o)
+            # interpret_unit_expr returns a bare Instance only for a NameExpr;
+            # given an OpExpr it yields a ComputedType (or None).
+            assert result is None or isinstance(result, ComputedType)
+            return result
+        except UnitExprError as err:
+            left = err.left if err.left is not None else get_proper_type(
+                self.accept(err.op_expr.left, type_context, always_allow_any=True, is_callee=True)
+            )
+            right = err.right if err.right is not None else get_proper_type(
+                self.accept(err.op_expr.right, type_context, always_allow_any=True, is_callee=True)
+            )
+            return self.msg.not_sipy_type_ctor(left, right, err.op_expr.op, error_ctx)
 
     def visit_call_expr_inner(self, e: CallExpr, allow_none_return: bool = False) -> Type:
         if (
