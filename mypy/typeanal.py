@@ -2727,6 +2727,16 @@ class FindTypeVarVisitor(SyntheticTypeVisitor[None]):
         self.seen_aliases.add(t)
         self.process_types(t.args)
 
+    def visit_compound_type(self, t: CompoundType) -> None:
+        t.numeric_type.accept(self)
+        t.base_type.accept(self)
+
+    def visit_computed_type(self, t: ComputedType) -> None:
+        if isinstance(t.left,ProperType):
+            t.left.accept(self)
+        if isinstance(t.right,ProperType):
+            t.right.accept(self)
+
     def process_types(self, types: list[Type] | tuple[Type, ...]) -> None:
         # Redundant type check helps mypyc.
         if isinstance(types, list):
