@@ -338,3 +338,45 @@ testfunc(Sec(np.float32(5)),(M/Sec**2)(2.2))
 
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
+
+[case testFunctionParamBareUnitCompound]
+# flags: --python-version 3.10
+from src.SUnit1.SIUnit import M, Sec
+
+def f(x: M[float]) -> None:
+    reveal_type(x)  # N: Revealed type is "Compound(src.SUnit1.SIUnit.M[builtins.float])"
+
+reveal_type(f)  # N: Revealed type is "def (x: Compound(src.SUnit1.SIUnit.M[builtins.float]))"
+f(M(1.0))
+f(Sec(1.0))  # E: Argument 1 to "f" has incompatible type "Sec[float]"; expected "M[float]"
+
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testFunctionParamNestedUnitCompound]
+# flags: --python-version 3.10
+from src.SUnit1.SIUnit import M
+
+def f(xs: list[M[float]]) -> None:
+    reveal_type(xs)  # N: Revealed type is "Compound(src.SUnit1.SIUnit.M[builtins.list[builtins.float]])"
+
+reveal_type(f)  # N: Revealed type is "def (xs: Compound(src.SUnit1.SIUnit.M[builtins.list[builtins.float]]))"
+f(M([1.0, 2.0]))
+
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testMethodParamUnitCompoundSelfUntouched]
+# flags: --python-version 3.10
+from src.SUnit1.SIUnit import M
+
+class C:
+    def method(self, x: M[float]) -> None:
+        reveal_type(self)  # N: Revealed type is "__main__.C"
+        reveal_type(x)  # N: Revealed type is "Compound(src.SUnit1.SIUnit.M[builtins.float])"
+
+reveal_type(C().method)  # N: Revealed type is "def (x: Compound(src.SUnit1.SIUnit.M[builtins.float]))"
+C().method(M(1.0))
+
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]

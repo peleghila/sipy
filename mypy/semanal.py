@@ -979,6 +979,13 @@ class SemanticAnalyzer(
                         info = self.type
                         if info.self_type is not None:
                             result.variables = [info.self_type] + list(result.variables)
+                    # Leave the (implicit) self/cls argument alone -- it must stay the
+                    # plain class instance/type, not get rewritten into a CompoundType
+                    # even when the enclosing class itself happens to be an SI unit.
+                    result = result.copy_modified(
+                        arg_types=result.arg_types[:skip_self]
+                        + [self.process_sipy_annotation(at) for at in result.arg_types[skip_self:]]
+                    )
                 defn.type = result
                 self.add_type_alias_deps(analyzer.aliases_used)
                 self.check_function_signature(defn)
@@ -3772,6 +3779,42 @@ class SemanticAnalyzer(
                 res.append(lv)
         return res
 
+    def process_sipy_annotation(self, analyzed: Type) -> Type:
+        """Convert a bare SI-unit annotation, or one with a unit nested inside a generic
+        (e.g. List[M]), into a CompoundType.
+
+        Shared between variable annotations (process_type_annotation) and function/method
+        parameter annotations (analyze_func_def), so both get the same unit-of-measure
+        treatment.
+        """
+        proper_analyzed = get_proper_type(analyzed)
+        if isinstance(proper_analyzed, Instance):
+            if is_sipy_base(proper_analyzed):
+                # TODO: error if no numeric base
+                numeric_base = get_proper_type(proper_analyzed.args[0])
+                # replace with compound type
+                analyzed = CompoundType(
+                    proper_analyzed,
+                    numeric_base,
+                    proper_analyzed.line,
+                    proper_analyzed.column
+                )
+        elif isinstance(proper_analyzed, ComputedType):
+            # Computation with no numeric
+            self.fail("Units must have a numeric type", proper_analyzed, code=codes.VALID_TYPE)
+            analyzed = AnyType(TypeOfAny.from_error, line=analyzed.line, column=analyzed.column)
+        if hasattr(analyzed, 'args') and analyzed.args:
+            clean_t, units = deunit_instance(get_proper_type(analyzed))
+            if len(units) == 1:
+                # Extract and turn into a compound
+                analyzed = CompoundType(
+                    units[0],
+                    clean_t,
+                    analyzed.line,
+                    analyzed.column
+                )
+        return analyzed
+
     def process_type_annotation(self, s: AssignmentStmt) -> None:
         """Analyze type annotation or infer simple literal type."""
         if s.type:
@@ -3782,32 +3825,7 @@ class SemanticAnalyzer(
             if analyzed is None or has_placeholder(analyzed):
                 self.defer(s)
                 return
-            proper_analyzed = get_proper_type(analyzed)
-            if isinstance(proper_analyzed, Instance):
-                if is_sipy_base(proper_analyzed):
-                    # TODO: error if no numeric base
-                    numeric_base = get_proper_type(proper_analyzed.args[0])
-                    # replace with compound type
-                    analyzed = CompoundType(
-                        proper_analyzed,
-                        numeric_base,
-                        proper_analyzed.line,
-                        proper_analyzed.column
-                    )
-            elif isinstance(proper_analyzed, ComputedType):
-                # Computation with no numeric
-                self.fail("Units must have a numeric type", proper_analyzed, code=codes.VALID_TYPE)
-                analyzed = AnyType(TypeOfAny.from_error, line=analyzed.line, column=analyzed.column)
-            if hasattr(analyzed, 'args') and analyzed.args:
-                clean_t, units = deunit_instance(get_proper_type(analyzed))
-                if len(units) == 1:
-                    # Extract and turn into a compound
-                    analyzed = CompoundType(
-                        units[0],
-                        clean_t,
-                        analyzed.line,
-                        analyzed.column
-                    )
+            analyzed = self.process_sipy_annotation(analyzed)
 
             s.type = analyzed
             if (
