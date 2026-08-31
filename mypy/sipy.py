@@ -1,6 +1,6 @@
 from typing import ClassVar, Dict, List, Set, Tuple, cast, Sequence
 
-from quiche.egraph import Subst
+from quiche.egraph import EMatch, Subst
 
 import mypy.types
 from mypy.nodes import AssignmentStmt, Expression, FuncDef, IntExpr, ListExpr, MypyFile, NameExpr, OpExpr, \
@@ -11,7 +11,7 @@ from mypy.types import Instance, ProperType, AnyType, ComputedType, CompoundType
     UnpackType, PartialType, TypedDictType, Overloaded, TypeVarTupleType, Parameters, ParamSpecType, DeletedType, \
     ErasedType, PlaceholderType, RawExpressionType, EllipsisType, CallableArgument, TypeList
 
-from quiche import EGraph, EClassID
+from quiche import EGraph, EClassID, ENode
 from quiche.lang.expr_lang import ExprNode, ExprTree
 from quiche.rewrite import Rule, ConditionalRule
 
@@ -26,9 +26,10 @@ def get_base_type(modules: Dict[str,MypyFile]) -> TypeInfo | None:
     module = modules[base_type_module]
     if base_type_classname not in module.names:
         return None
-    if not isinstance(module.names[base_type_classname].node,TypeInfo):
-        return None
-    return module.names[base_type_classname].node
+    node = module.names[base_type_classname].node
+    if isinstance(node, TypeInfo):
+        return node
+    return None
 
 
 def is_info_sipy_base(typenode: TypeInfo) -> bool:
@@ -198,7 +199,7 @@ def is_sipy_aliases_assignment(s: AssignmentStmt, cur_mod_id: str) -> bool:
 # so this lives next to the e-graph it feeds rather than being attached to a
 # node -- in particular not to MypyFile, which is instantiated for every module
 # mypy ever reads, none of which but this one would ever have a value here.
-unit_aliases: "List[Tuple[Instance, ProperType]]" = []
+unit_aliases: "List[Tuple[Instance, (ComputedType | Instance)]]" = []
 
 
 class EgraphTypeCompare:
@@ -212,6 +213,7 @@ class EgraphTypeCompare:
         elif isinstance(t.left, Instance):
             l = ExprNode(t.left.type.name,())
         else:
+            assert isinstance(t.left, int)
             l = ExprNode(t.left,())
 
         if isinstance(t.right, ComputedType):
@@ -219,6 +221,7 @@ class EgraphTypeCompare:
         elif isinstance(t.right, Instance):
             r = ExprNode(t.right.type.name,())
         else:
+            assert isinstance(t.right, int)
             r = ExprNode(t.right,())
 
         return ExprNode(t.op,(l,r))
@@ -232,41 +235,76 @@ class EgraphTypeCompare:
 
 
     class IntSuccessorRule(ConditionalRule):
-        """n -> (n - 1) + 1, for any integer n, if (n - 1) is also present."""
+        """n -> (n - 1) + 1, for any integer n, if (n - 1) is also present.
+
+        The e-graph has no arithmetic of its own, so the symbolic "+" node
+        produced by the (x ** y) * x -> x ** (y + 1) rule never folds into a
+        literal: this rule is what makes e.g. the 3 of an annotated (Sec**3)
+        equal to the 2 + 1 that Sec*Sec*Sec rewrites to.
+        """
+
+        # Both search() and apply_to_eclass() are overridden, so the lhs/rhs
+        # patterns a plain Rule matches and substitutes with are never
+        # consulted -- but Rule's interface is typed for real QuicheTrees, so
+        # give it one rather than lying to it with None.
+        _unused_pattern: ClassVar[ExprTree] = ExprTree(ExprNode("n", ()))
 
         def __init__(self) -> None:
-            super().__init__(lhs=None, rhs=None)
-
-        def search(self, egraph: EGraph) -> Sequence[Tuple[EClassID,Dict[str,EClassID]]]:
-            return [
-                (eid, {"n": node.key})
-                for eid, enodes in egraph.eclasses().items()
-                for node in enodes
-                if isinstance(node.key, int) and not node.args
-            ]
+            super().__init__(lhs=self._unused_pattern, rhs=self._unused_pattern)
 
         @staticmethod
-        def literal_present(egraph: EGraph, value: int) -> bool:
-            return any(
-                node.key == value and not node.args
-                for enodes in egraph.eclasses().values()
-                for node in enodes
-            )
+        def literal_eclass(egraph: EGraph, value: int) -> EClassID | None:
+            """The e-class holding the int literal `value`, or None if the
+            graph doesn't contain it.
+
+            This O(1) hashcons hit is exactly equivalent to scanning every
+            e-node in the graph: hashcons is keyed by *canonicalized* e-nodes,
+            a leaf e-node is its own canonicalization, and repair() only ever
+            re-keys e-nodes taken from an e-class's `uses` list -- which is
+            only ever populated for e-nodes that have arguments. So a literal,
+            once added, stays under an unchanging key forever. The scan is
+            worth avoiding because egraph.eclasses() rebuilds its whole
+            e-class -> e-node index on any call made after the graph has been
+            mutated, which is every call once a round's rewrites start landing.
+            """
+            eid = egraph.hashcons.get(ENode(value, ()))
+            return eid.find() if eid is not None else None
+
+        def search(self, egraph: EGraph) -> Sequence[EMatch]:
+            """Match each int literal whose predecessor is also in the graph,
+            binding "n" to the literal's e-class and "n_minus_1" to its
+            predecessor's.
+
+            Resolving the predecessor here, where the int value is in hand, is
+            what keeps the substitution honestly typed as a Subst
+            (str -> EClassID). Stashing the raw int in it instead would make
+            every EClassID annotation downstream of it a lie -- and it isn't
+            needed: applying the rule wants the *e-class of* (n - 1), never the
+            number itself.
+            """
+            matches: List[EMatch] = []
+            for enode, eid in egraph.hashcons.items():
+                if not isinstance(enode.key, int) or enode.args:
+                    continue
+                pred = self.literal_eclass(egraph, enode.key - 1)
+                if pred is not None:
+                    matches.append((eid.find(), {"n": eid.find(), "n_minus_1": pred}))
+            return matches
+
         def check_condition(self, egraph: EGraph, eid: EClassID, env: Subst) -> bool:
-            return self.literal_present(egraph, env["n"] - 1)
+            # search() only emits matches whose predecessor resolved, so this
+            # is really just a guard on the shape of the substitution.
+            return "n_minus_1" in env
 
         def apply_to_eclass(self, egraph: EGraph, eid: EClassID, env: Subst) -> EClassID:
             if not self.check_condition(egraph, eid, env):
                 return eid
-            n = env["n"]
-            n_minus_1_id = egraph.add(ExprTree(ExprNode(n - 1, ())))
-            one_id = egraph.add(ExprTree(ExprNode(1, ())))
-            from quiche import ENode
-            return egraph.add_enode(ENode("+", (n_minus_1_id, one_id)))
+            one_id = egraph.add_enode(ENode(1, ()))
+            return egraph.add_enode(ENode("+", (env["n_minus_1"], one_id)))
 
     @staticmethod
     def get_iter_limit(t1: ComputedType, t2: ProperType | None = None) -> int:
-        def depth(t: ProperType):
+        def depth(t: ProperType | int) -> int:
             if isinstance(t, ComputedType):
                 return 1 + max(depth(t.left), depth(t.right))
             else:
@@ -297,6 +335,7 @@ class EgraphTypeCompare:
         return is_eq
 
     egraph_rules = [
+        IntSuccessorRule(),
         ExprTree.make_rule(lambda x, y, z: ((x * y) / z, x * (y / z))),
         ExprTree.make_rule(lambda x, y: ((x / y)  * y, x)),
         ExprTree.make_rule(lambda x: (x / x, ExprNode(1, ()))),
@@ -307,11 +346,11 @@ class EgraphTypeCompare:
         ExprTree.make_rule(lambda x: (x ** 2, x * x)),
         # ExprTree.make_rule(lambda x: (x ** 0, 1)),
         ExprTree.make_rule(lambda x,y: ((x ** y) * x, x ** (y + 1))),
-        IntSuccessorRule()
     ]
 
     @staticmethod
     def egraph_is_same(t1: ComputedType, t2: ProperType) -> bool:
+        assert isinstance(t2, (Instance,ComputedType)), t2
         lhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t1)))
         rhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t2)))
         is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
