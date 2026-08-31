@@ -1,4 +1,4 @@
-from typing import ClassVar, Dict, List, Set, Tuple, cast
+from typing import ClassVar, Dict, List, Set, Tuple, cast, Sequence
 
 from quiche.egraph import Subst
 
@@ -237,7 +237,7 @@ class EgraphTypeCompare:
         def __init__(self) -> None:
             super().__init__(lhs=None, rhs=None)
 
-        def search(self, egraph: EGraph) -> Tuple[EClassID,Dict[str,int]]:
+        def search(self, egraph: EGraph) -> Sequence[Tuple[EClassID,Dict[str,EClassID]]]:
             return [
                 (eid, {"n": node.key})
                 for eid, enodes in egraph.eclasses().items()
@@ -263,14 +263,37 @@ class EgraphTypeCompare:
             one_id = egraph.add(ExprTree(ExprNode(1, ())))
             from quiche import ENode
             return egraph.add_enode(ENode("+", (n_minus_1_id, one_id)))
+
+    @staticmethod
+    def get_iter_limit(t1: ComputedType, t2: ProperType | None = None) -> int:
+        def depth(t: ProperType):
+            if isinstance(t, ComputedType):
+                return 1 + max(depth(t.left), depth(t.right))
+            else:
+                return 1
+        ast_depth = depth(t1) if t2 is None else max(depth(t1), depth(t2))
+        return min(2*ast_depth + 4, 30) # 4 to leave room for constant folding etc, 30 is egg default limit
+
+    @staticmethod
+    def restart_if_needed(found: bool) -> None:
+        if found or EgraphTypeCompare.egraph.is_saturated(): # if finished by finding or saturation, ok
+            return
+        elif len(EgraphTypeCompare.egraph.hashcons) < 10000: # haven't hit the egg default limit
+            return
+        # dump it all out, start over next time
+        EgraphTypeCompare.egraph = EGraph()
+
     @staticmethod
     def egraph_reduces_to_1(t: ComputedType) -> bool:
         teclass = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t)))
         one = EgraphTypeCompare.egraph.add(ExprTree(ExprNode(1,())))
         is_eq = EgraphTypeCompare.egraph.find(teclass) == EgraphTypeCompare.egraph.find(one)
-        while not is_eq and not EgraphTypeCompare.egraph.is_saturated():
+        iter_limit = EgraphTypeCompare.get_iter_limit(t)
+        while not is_eq and not EgraphTypeCompare.egraph.is_saturated() and iter_limit > 0:
             EgraphTypeCompare.rule_apply()
             is_eq = EgraphTypeCompare.egraph.find(teclass) == EgraphTypeCompare.egraph.find(one)
+            iter_limit -= 1
+        EgraphTypeCompare.restart_if_needed(is_eq)
         return is_eq
 
     egraph_rules = [
@@ -292,9 +315,12 @@ class EgraphTypeCompare:
         lhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t1)))
         rhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t2)))
         is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
-        while not is_eq and not EgraphTypeCompare.egraph.is_saturated():
+        iter_limit = EgraphTypeCompare.get_iter_limit(t1,t2)
+        while not is_eq and not EgraphTypeCompare.egraph.is_saturated() and iter_limit > 0:
             EgraphTypeCompare.rule_apply()
             is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
+            iter_limit -= 1
+        EgraphTypeCompare.restart_if_needed(is_eq)
         return is_eq
 
 
