@@ -1114,20 +1114,20 @@ class SubtypeVisitor(TypeVisitor[bool]):
     def visit_type_alias_type(self, left: TypeAliasType) -> bool:
         assert False, f"This should be never called, got {left}"
 
-    def visit_compound_type(self, left: CompoundType):
+    def visit_compound_type(self, left: CompoundType) -> bool:
         right = self.right
         if isinstance(right, Instance) and right.type._fullname == "builtins.object":
             return True
         if isinstance(right, CompoundType):
             return self._is_subtype(left.base_type,right.base_type) and self._is_subtype(left.numeric_type,right.numeric_type)
         from mypy.sipy import EgraphTypeCompare
-        if EgraphTypeCompare.egraph_reduces_to_1(left.base_type):
+        if isinstance(left.base_type, ComputedType) and EgraphTypeCompare.egraph_reduces_to_1(left.base_type):
             return self._is_subtype(left.numeric_type,right)
         return False
 
 
     def visit_computed_type(self, t: ComputedType) -> bool:
-        def is_same_base_type(lhs: Type | int, rhs: Type | int) -> bool:
+        def is_same_base_type(lhs: ProperType | int, rhs: ProperType | int) -> bool:
             if isinstance(lhs, ComputedType) and isinstance(rhs,ComputedType):
                 return lhs.op == rhs.op and is_same_base_type(lhs.left,rhs.left) and is_same_base_type(lhs.right, rhs.right)
             else:

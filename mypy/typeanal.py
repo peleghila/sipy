@@ -1392,42 +1392,47 @@ class TypeAnalyser(SyntheticTypeVisitor[Type], TypeAnalyzerPluginInterface):
 
     def visit_compound_type(self, t: CompoundType) -> Type:
         base = self.anal_type(t.base_type)
-
-        if isinstance(base,AnyType):
+        proper_base = get_proper_type(base)
+        if isinstance(proper_base,AnyType):
             self.fail("Invalid type comment or annotation", t, code=codes.VALID_TYPE)
             return AnyType(TypeOfAny.from_error, line=base.line, column=base.column)
 
         numeric = self.anal_type(t.numeric_type)
-        if isinstance(numeric, AnyType):
+        proper_numeric = get_proper_type(numeric)
+        if isinstance(proper_numeric, AnyType):
             self.fail("Invalid type comment or annotation", t, code=codes.VALID_TYPE)
             return AnyType(TypeOfAny.from_error, line=numeric.line, column=numeric.column)
         return CompoundType(
-            base,
-            numeric,
+            proper_base,
+            proper_numeric,
             t.line,
             t.column
         )
     def visit_computed_type(self, t: ComputedType) -> Type:
         if isinstance(t.left,ProperType):
-            lhs = self.anal_type(t.left)
-            if not is_sipy_base(lhs):
+            _lhs = self.anal_type(t.left)
+            proper_lhs = get_proper_type(_lhs)
+            if not is_sipy_base(proper_lhs):
                 if self.report_invalid_types:
-                    self.fail("Invalid type comment or annotation", lhs, code=codes.VALID_TYPE)
-                return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
+                    self.fail("Invalid type comment or annotation", _lhs, code=codes.VALID_TYPE)
+                return AnyType(TypeOfAny.from_error, line=_lhs.line, column=t.column)
+            lhs: ProperType | int = proper_lhs
         elif isinstance(t.left, int):
             lhs = t.left
         else:
-            return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
+            return AnyType(TypeOfAny.from_error, line=t.line, column=t.column)
         if isinstance(t.right, ProperType):
-            rhs = self.anal_type(t.right)
-            if not is_sipy_base(rhs):
+            _rhs = self.anal_type(t.right)
+            proper_rhs = get_proper_type(_rhs)
+            if not is_sipy_base(proper_rhs):
                 if self.report_invalid_types:
-                    self.fail("Invalid type comment or annotation", rhs, code=codes.VALID_TYPE)
-                return AnyType(TypeOfAny.from_error, line=rhs.line, column=rhs.column)
+                    self.fail("Invalid type comment or annotation", _rhs, code=codes.VALID_TYPE)
+                return AnyType(TypeOfAny.from_error, line=_rhs.line, column=_rhs.column)
+            rhs: ProperType | int = proper_rhs
         elif isinstance(t.right, int):
             rhs = t.right
         else:
-            return AnyType(TypeOfAny.from_error, line=lhs.line, column=t.column)
+            return AnyType(TypeOfAny.from_error, line=t.line, column=t.column)
         return ComputedType(lhs,rhs,t.op,t.line,t.column)
 
     def analyze_callable_args_for_paramspec(

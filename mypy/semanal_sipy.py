@@ -26,7 +26,7 @@ from mypy import sipy
 from mypy.nodes import AssignmentStmt, Expression, ListExpr, MypyFile, NameExpr, TupleExpr, TypeInfo
 from mypy.semanal_shared import SemanticAnalyzerInterface
 from mypy.sipy import UnitExprError, interpret_unit_expr, is_info_sipy_base, is_sipy_aliases_assignment
-from mypy.types import Instance, ProperType
+from mypy.types import Instance, ProperType, ComputedType
 
 
 class SipyAliasAnalyzer:
@@ -53,7 +53,7 @@ class SipyAliasAnalyzer:
             return False
         assert isinstance(s.rvalue, ListExpr)
 
-        aliases: list[tuple[Instance, ProperType]] = []
+        aliases: list[tuple[Instance, (ComputedType | Instance)]] = []
         for item in s.rvalue.items:
             pair = self._process_one(item)
             if pair is not None:
@@ -61,7 +61,7 @@ class SipyAliasAnalyzer:
         sipy.unit_aliases = aliases
         return True
 
-    def _process_one(self, item: Expression) -> tuple[Instance, ProperType] | None:
+    def _process_one(self, item: Expression) -> tuple[Instance, (ComputedType | Instance)] | None:
         if not (isinstance(item, TupleExpr) and len(item.items) == 2):
             self.api.fail(
                 "Each entry in `_aliases` must be a 2-tuple (unit type, unit expression)", item

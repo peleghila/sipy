@@ -1,4 +1,4 @@
-from typing import ClassVar, Dict, List, Set, Tuple, cast, Sequence
+from typing import ClassVar, Dict, List, Set, Tuple, cast, Sequence, Optional
 
 from quiche.egraph import EMatch, Subst
 
@@ -133,7 +133,7 @@ class UnitExprError(Exception):
         self.op_expr = op_expr
 
 
-def interpret_unit_expr(o: Expression) -> "ProperType | None":
+def interpret_unit_expr(o: Expression) -> Optional[ComputedType | Instance]:
     """Pure syntactic interpretation of an SI-unit computation such as
     `M/Sec**2` or `1/Sec`, mirroring the arithmetic already legal in unit-type
     annotation position. Only needs semantic analysis (name binding), not full
