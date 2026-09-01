@@ -427,8 +427,26 @@ def load_unit_alias_rules() -> None:
     UnitExprTree.literal_names = literal_names
     EgraphTypeCompare.alias_rules = rules
 
+def split_unit_type(t: Type) -> Tuple[Type, ProperType | None]:
+    """If t carries an SI unit, split it into (plain type, unit); else (t, None)."""
+    proper_t = mypy.types.get_proper_type(t)
+    if proper_t is None:
+        return t, None
+    if isinstance(proper_t, CompoundType):
+        return proper_t.numeric_type, proper_t.base_type
+    elif isinstance(proper_t, Instance):
+        if hasattr(proper_t, 'args') and proper_t.args:
+            new_t, units = deunit_instance(proper_t)
+            assert len(units) <= 1
+            return new_t, (units[0] if units else None)
+        return t, None
+    else:
+        return t, None
 
 def deunit_instance(t: ProperType) -> Tuple[ProperType, List[ProperType]]:
+    """Early in semantic analysis, unitful types with no computations can appear as Instance[Unit],
+   strip out all the units from the args and the args' args, as part of the transformation
+   into CompoundType(Unit,Instance)."""
     assert isinstance(t,ProperType),t
     if isinstance(t, (Instance,TypeAliasType)):
         if not t.args:

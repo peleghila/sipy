@@ -107,7 +107,7 @@ from mypy.plugin import (
     Plugin,
 )
 from mypy.semanal_enum import ENUM_BASES
-from mypy.sipy import is_sipy_base, is_info_sipy_base, deunit_instance, is_funcdef_sipy_dtype
+from mypy.sipy import is_sipy_base, is_info_sipy_base, is_funcdef_sipy_dtype, split_unit_type
 from mypy.state import state
 from mypy.subtypes import (
     find_member,
@@ -1584,7 +1584,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             with self.msg.filter_errors() as w:
                 arg0_type = get_proper_type(self.accept(args[0], always_allow_any=True))
             if not w.has_new_errors() and is_sipy_base(arg0_type):
-                _, base_unit = ExpressionChecker.split_unit_type(arg0_type)
+                _, base_unit = split_unit_type(arg0_type)
                 if base_unit is not None:
                     k = ExpressionChecker.get_numeric_literal_value(args[1])
                     if k is None:
@@ -4154,8 +4154,8 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             # if either side is a si, rip it out and leave the numeric
             # and recompose later
             other_type = left_type if base_type == right_type else right_type
-            base_type, base_unit = ExpressionChecker.split_unit_type(base_type)
-            other_type, other_unit = ExpressionChecker.split_unit_type(other_type)
+            base_type, base_unit = split_unit_type(base_type)
+            other_type, other_unit = split_unit_type(other_type)
 
             with self.msg.filter_errors() as w:
                 member = analyze_member_access(
@@ -4322,7 +4322,7 @@ class ExpressionChecker(ExpressionVisitor[Type]):
 
         if not variants:
             if op_name == '__pow__':
-                _, unit = ExpressionChecker.split_unit_type(left_type)
+                _, unit = split_unit_type(left_type)
                 if (
                     unit is not None
                     and ExpressionChecker.get_numeric_literal_value(right_expr) is None
@@ -4593,7 +4593,21 @@ class ExpressionChecker(ExpressionVisitor[Type]):
             self.chk.check_for_truthy_type(operand_type, e.expr)
         else:
             method = operators.unary_op_methods[op]
+            # All remaining options are numeric and not unit-chaning
+            operand_type, reserved_units = split_unit_type(operand_type)
             result, method_type = self.check_method_call_by_name(method, operand_type, [], [], e)
+            if reserved_units is not None:
+                method_type = self.unit_modify(
+                    method_type,
+                    op,
+                    operand_type,
+                    reserved_units,
+                    None,
+                    None,
+                    e
+                )
+                result = CompoundType(reserved_units,result,result.line,result.column)
+
             e.method_type = method_type
         return result
 
@@ -6566,22 +6580,6 @@ class ExpressionChecker(ExpressionVisitor[Type]):
         ):
             return proper_t.value
         return None
-
-    @staticmethod
-    def split_unit_type(t: Type) -> tuple[Type, ProperType | None]:
-        """If t carries an SI unit, split it into (plain type, unit); else (t, None)."""
-        if not isinstance(t, ProperType): #TODO: should maybe be getpropertype
-            return t, None
-        if isinstance(t, CompoundType):
-            return t.numeric_type, t.base_type
-        elif isinstance(t, Instance):
-            if t.args:
-                new_t, units = deunit_instance(t)
-                assert len(units) <= 1
-                return new_t, (units[0] if units else None)
-            return t, None
-        else:
-            return t, None
 
 
     def make_computed_type(self, op_name: str, left_type: ProperType | None, right_type: ProperType | None,

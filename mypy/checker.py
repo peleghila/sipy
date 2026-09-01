@@ -145,7 +145,7 @@ from mypy.scope import Scope
 from mypy.semanal import is_trivial_body, refers_to_fullname, set_callable_name
 from mypy.semanal_enum import ENUM_BASES, ENUM_SPECIAL_PROPS
 from mypy.sharedparse import BINARY_MAGIC_METHODS
-from mypy.sipy import is_sipy_aliases_assignment
+from mypy.sipy import is_sipy_aliases_assignment, split_unit_type
 from mypy.state import state
 from mypy.subtypes import (
     find_member,
@@ -4556,10 +4556,7 @@ class TypeChecker(NodeVisitor[None], CheckerPluginInterface):
         self.try_infer_partial_type_from_indexed_assignment(lvalue, rvalue)
         basetype = get_proper_type(self.expr_checker.accept(lvalue.base))
         # reserve unit here
-        reserved_units = None
-        if isinstance(basetype,CompoundType):
-            reserved_units = basetype.base_type
-            basetype = basetype.numeric_type
+        basetype, reserved_units = split_unit_type(basetype)
 
         method_type = self.expr_checker.analyze_external_member_access(
             "__setitem__", basetype, lvalue
