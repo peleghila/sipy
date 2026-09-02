@@ -407,21 +407,21 @@ C().method(M(1.0))
 [builtins fixtures/builtins-fuller.pyi]
 
 
-[case testBadCrossUnitCommutativity-xfail]
+[case testBadCrossUnitCommutativity]
 from src.SUnit1.SIUnit import M, Sec
 a: M[int] = M(2)
 b: Sec[int] = Sec(3)
 p1: (M*Sec)[int] = a * b
-p2: (Sec*M)[int] = a * b  # should be legal (M*Sec == Sec*M) but currently fails
+p2: (Sec*M)[int] = a * b  # should be legal (M*Sec == Sec*M)
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
 
-[case testBadPowMulOperandOrder-xfail]
+[case testBadPowMulOperandOrder]
 from src.SUnit1.SIUnit import M
 a: M[int] = M(2)
 sq: (M**2)[int] = a * a
 good: (M**3)[int] = sq * a   # matches (x**y)*x -> x**(y+1): passes today
-bad: (M**3)[int] = a * sq    # x*(x**y): no rule matches this order, currently fails
+also_good: (M**3)[int] = a * sq
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
 

@@ -226,12 +226,40 @@ class EgraphTypeCompare:
 
         return ExprNode(t.op,(l,r))
 
-    egraph = EGraph()
+    one_big_egraph = EGraph()
     alias_rules: List[Rule] = []
+    non_equivalences: List[Tuple[ComputedType | Instance | int, ComputedType | Instance | int]] = []
 
-    @staticmethod
-    def rule_apply() -> None:
-        Rule.apply_rules(EgraphTypeCompare.egraph_rules + EgraphTypeCompare.alias_rules, EgraphTypeCompare.egraph)
+    class LittleEgraph:
+        @staticmethod
+        def get_iter_limit(t1: ExprNode, t2: ExprNode | None = None) -> int:
+            def depth(t: ExprNode) -> int:
+                if t.args:
+                    return 1 + max([depth(child) for child in t.args])
+                else:
+                    return 1
+
+            ast_depth = depth(t1) if t2 is None else max(depth(t1), depth(t2))
+            return min(2 * ast_depth + 4, 30)  # 4 to leave room for constant folding etc, 30 is egg default limit
+
+        def __init__(self):
+            self.egraph = EGraph()
+
+        def is_same(self, lhs: ExprNode, rhs: ExprNode):
+            lhs_class = self.egraph.add(ExprTree(lhs))
+            rhs_class = self.egraph.add(ExprTree(rhs))
+            is_eq = self.egraph.find(lhs_class) == self.egraph.find(rhs_class)
+            iter_limit = EgraphTypeCompare.LittleEgraph.get_iter_limit(lhs)
+            while not is_eq and not self.egraph.is_saturated() and iter_limit > 0 and len(self.egraph.hashcons) < 10000:
+                Rule.apply_rules(EgraphTypeCompare.egraph_rules + EgraphTypeCompare.alias_rules, self.egraph)
+                is_eq = self.egraph.find(lhs_class) == self.egraph.find(rhs_class)
+                iter_limit -= 1
+            return is_eq
+
+
+    # @staticmethod
+    # def rule_apply() -> None:
+    #     Rule.apply_rules(EgraphTypeCompare.egraph_rules + EgraphTypeCompare.alias_rules, EgraphTypeCompare.egraph)
 
 
     class IntSuccessorRule(ConditionalRule):
@@ -302,42 +330,47 @@ class EgraphTypeCompare:
             one_id = egraph.add_enode(ENode(1, ()))
             return egraph.add_enode(ENode("+", (env["n_minus_1"], one_id)))
 
-    @staticmethod
-    def get_iter_limit(t1: ComputedType, t2: ProperType | None = None) -> int:
-        def depth(t: ProperType | int) -> int:
-            if isinstance(t, ComputedType):
-                return 1 + max(depth(t.left), depth(t.right))
-            else:
-                return 1
-        ast_depth = depth(t1) if t2 is None else max(depth(t1), depth(t2))
-        return min(2*ast_depth + 4, 30) # 4 to leave room for constant folding etc, 30 is egg default limit
+
+
+    # @staticmethod
+    # def restart_if_needed(found: bool) -> None:
+    #     if found or EgraphTypeCompare.egraph.is_saturated(): # if finished by finding or saturation, ok
+    #         return
+    #     elif len(EgraphTypeCompare.egraph.hashcons) < 10000: # haven't hit the egg default limit
+    #         return
+    #     # dump it all out, start over next time
+    #     EgraphTypeCompare.egraph = EGraph()
 
     @staticmethod
-    def restart_if_needed(found: bool) -> None:
-        if found or EgraphTypeCompare.egraph.is_saturated(): # if finished by finding or saturation, ok
-            return
-        elif len(EgraphTypeCompare.egraph.hashcons) < 10000: # haven't hit the egg default limit
-            return
-        # dump it all out, start over next time
-        EgraphTypeCompare.egraph = EGraph()
+    def _outer_is_same(lhs: ComputedType, rhs: ComputedType | int) -> bool:
+        lhs_node = EgraphTypeCompare._to_node(lhs)
+        rhs_node = ExprNode(1,()) if rhs == 1 else EgraphTypeCompare._to_node(rhs)
+        lhs_class = EgraphTypeCompare.one_big_egraph.add(ExprTree(lhs_node))
+        rhs_class = EgraphTypeCompare.one_big_egraph.add(ExprTree(rhs_node))
+        if EgraphTypeCompare.one_big_egraph.find(lhs_class) == EgraphTypeCompare.one_big_egraph.find(rhs_class):
+            return True
+        elif (lhs,rhs) in EgraphTypeCompare.non_equivalences or (rhs,lhs) in EgraphTypeCompare.non_equivalences:
+            return False
+        else: # Try to prove and update one or the other
+            small_egraph = EgraphTypeCompare.LittleEgraph()
+            if small_egraph.is_same(lhs_node,rhs_node):
+                EgraphTypeCompare.one_big_egraph.merge(lhs_class,rhs_class)
+                EgraphTypeCompare.one_big_egraph.rebuild()
+                return True
+            else:
+                EgraphTypeCompare.non_equivalences.append((lhs,rhs))
+                return False
+
 
     @staticmethod
     def egraph_reduces_to_1(t: ComputedType) -> bool:
-        teclass = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t)))
-        one = EgraphTypeCompare.egraph.add(ExprTree(ExprNode(1,())))
-        is_eq = EgraphTypeCompare.egraph.find(teclass) == EgraphTypeCompare.egraph.find(one)
-        iter_limit = EgraphTypeCompare.get_iter_limit(t)
-        while not is_eq and not EgraphTypeCompare.egraph.is_saturated() and iter_limit > 0:
-            EgraphTypeCompare.rule_apply()
-            is_eq = EgraphTypeCompare.egraph.find(teclass) == EgraphTypeCompare.egraph.find(one)
-            iter_limit -= 1
-        EgraphTypeCompare.restart_if_needed(is_eq)
-        return is_eq
+        return EgraphTypeCompare._outer_is_same(t,1)
 
     egraph_rules = [
         IntSuccessorRule(),
         ExprTree.make_rule(lambda x, y, z: ((x * y) / z, x * (y / z))),
-        ExprTree.make_rule(lambda x, y: ((x / y)  * y, x)),
+        ExprTree.make_rule(lambda x, y: ((x / y) * y, x)),
+        ExprTree.make_rule(lambda x, y: ((x * y), (y * x))),
         ExprTree.make_rule(lambda x: (x / x, ExprNode(1, ()))),
         ExprTree.make_rule(lambda x: (x * 1, x)),
         ExprTree.make_rule(lambda x: (x / 1, x)),
@@ -350,17 +383,7 @@ class EgraphTypeCompare:
 
     @staticmethod
     def egraph_is_same(t1: ComputedType, t2: ProperType) -> bool:
-        assert isinstance(t2, (Instance,ComputedType)), t2
-        lhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t1)))
-        rhs_id = EgraphTypeCompare.egraph.add(ExprTree(EgraphTypeCompare._to_node(t2)))
-        is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
-        iter_limit = EgraphTypeCompare.get_iter_limit(t1,t2)
-        while not is_eq and not EgraphTypeCompare.egraph.is_saturated() and iter_limit > 0:
-            EgraphTypeCompare.rule_apply()
-            is_eq = EgraphTypeCompare.egraph.find(lhs_id) == EgraphTypeCompare.egraph.find(rhs_id)
-            iter_limit -= 1
-        EgraphTypeCompare.restart_if_needed(is_eq)
-        return is_eq
+        return EgraphTypeCompare._outer_is_same(t1,t2)
 
 
 class UnitExprTree(ExprTree):
