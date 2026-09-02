@@ -156,6 +156,13 @@ tsq8: (Sec**3)[float] = math.pow(t2,3)
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
 
+[case testMathPowFailsWithoutImport]
+from src.SUnit1.SIUnit import Sec
+t1: Sec[int] = Sec(6)
+tsq1: (Sec*Sec)[float] = math.pow(t1,2) # E: Name "math" is not defined
+[builtins fixtures/builtins-fuller.pyi]
+[typing fixtures/typing-fuller.pyi]
+
 [case testFractionAnnotations]
 from src.SUnit1.SIUnit import Sec
 import math
@@ -260,6 +267,17 @@ from src.SUnit1.SIUnit import M, dtype
 y0: M[np.float64] = M(np.float64(2.0))
 y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
 y[0] = y0
+[typing fixtures/typing-fuller.pyi]
+[builtins fixtures/builtins-fuller.pyi]
+
+[case testGoodAssignmentNDArrayElementGetItem]
+# flags: --python-version 3.10
+import numpy as np
+from numpy.typing import NDArray
+from src.SUnit1.SIUnit import M, dtype
+y0: M[np.float64] = M(np.float64(2.0))
+y: NDArray[M[np.float64]] = np.zeros(2,dtype=dtype(M[np.float64]))
+y[1] = y0 + y[0]
 [typing fixtures/typing-fuller.pyi]
 [builtins fixtures/builtins-fuller.pyi]
 
@@ -413,5 +431,9 @@ a: M[int] = M(2)
 b: Sec[int] = Sec(3)
 good: M[int] = (a / b) * b   # matches (x/y)*y -> x: passes today
 bad: M[int] = b * (a / b)    # y*(x/y): no rule matches this order, currently fails
+
+def ex3(g: (M/Sec**2)[int], D: (M**-1)[int], vi: (M/Sec)[int]) -> None:
+    print(-g -D*vi*(-vi)) #matches
+
 [builtins fixtures/builtins-fuller.pyi]
 [typing fixtures/typing-fuller.pyi]
